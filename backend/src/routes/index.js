@@ -23,6 +23,10 @@ router.put('/patients/:id', authenticate, authorize('DOCTOR', 'ADMIN'), patientA
 router.post('/patients/:id/caregiver', authenticate, authorize('DOCTOR', 'ADMIN'), C.assignCaregiver);
 router.delete('/patients/:id/caregiver', authenticate, authorize('DOCTOR', 'ADMIN'), C.removeCaregiver);
 
+// Caregivers
+router.post('/caregivers', authenticate, authorize('DOCTOR', 'ADMIN'), C.createCaregiver);
+router.get('/caregivers/:id', authenticate, authorize('DOCTOR', 'ADMIN'), C.getCaregiver);
+
 // Exercises
 router.post('/exercises', authenticate, authorize('DOCTOR', 'ADMIN'), validate(exerciseSchema), C.createExercise);
 router.get('/exercises', authenticate, C.listExercises);
@@ -34,6 +38,7 @@ router.get('/patients/:id/exercise-history', authenticate, patientAccess, C.exer
 
 // Medicines
 router.post('/medicines', authenticate, authorize('DOCTOR', 'ADMIN'), validate(medicineSchema), C.createMedicine);
+router.get('/medicines', authenticate, C.listMedicines);
 router.post('/medicine-assignments', authenticate, authorize('DOCTOR', 'ADMIN'), validate(medicineAssignSchema), C.assignMedicine);
 router.get('/patients/:id/medicines', authenticate, patientAccess, C.patientMedicines);
 router.post('/medicine-logs', authenticate, authorize('CAREGIVER', 'ADMIN'), validate(medicineLogSchema), C.logMedicine);

@@ -5,7 +5,7 @@
     "version": "1.0.0",
     "orientation": "portrait",
     "extra": {
-      "apiUrl": "https://parko-api.onrender.com/api"
+      "apiUrl": "https://parko-wxij.onrender.com/api"
     }
   }
 }

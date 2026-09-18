@@ -52,6 +52,8 @@ const assignCaregiver = asyncHandler(async (req, res) => {
     cgId = u.id;
   }
   if (!cgId) return fail(res, 'caregiverId or caregiverEmail required', 400);
+  const patient = await prisma.patient.findFirst({ where: { id: req.params.id, deletedAt: null } });
+  if (!patient) return fail(res, 'Patient not found', 404);
   const link = await prisma.patientCaregiver.upsert({
     where: { patientId_caregiverId: { patientId: req.params.id, caregiverId: cgId } },
     update: {}, create: { patientId: req.params.id, caregiverId: cgId },
@@ -66,6 +68,26 @@ const removeCaregiver = asyncHandler(async (req, res) => {
   return ok(res, { message: 'Removed' });
 });
 
+// ---- Caregivers ----
+const createCaregiver = asyncHandler(async (req, res) => {
+  const { email, password, fullName, phone, relation } = req.body;
+  if (!email || !password || !fullName) return fail(res, 'email, password, fullName required', 400);
+  const exists = await prisma.user.findUnique({ where: { email } });
+  if (exists) return fail(res, 'Email already registered', 409);
+  const { hashPassword } = require('../utils/password');
+  const user = await prisma.user.create({ data: { email, passwordHash: await hashPassword(password), fullName, role: 'CAREGIVER' } });
+  await prisma.caregiver.create({ data: { userId: user.id, phone, relation } });
+  await audit(req.user.id, 'create_caregiver', 'users', user.id, req.ip);
+  return ok(res, { id: user.id, email: user.email, fullName: user.fullName, role: user.role }, 201);
+});
+
+const getCaregiver = asyncHandler(async (req, res) => {
+  const user = await prisma.user.findFirst({ where: { id: req.params.id, role: 'CAREGIVER', deletedAt: null }, include: { caregiverProfile: true } });
+  if (!user) return fail(res, 'Caregiver not found', 404);
+  const links = await prisma.patientCaregiver.findMany({ where: { caregiverId: user.id }, include: { patient: true } });
+  return ok(res, { id: user.id, email: user.email, fullName: user.fullName, profile: user.caregiverProfile, patients: links.map((l) => l.patient) });
+});
+
 // ---- Exercises ----
 const createExercise = asyncHandler(async (req, res) => ok(res, await prisma.exercise.create({ data: req.body }), 201));
 const listExercises = asyncHandler(async (req, res) => ok(res, await prisma.exercise.findMany({ orderBy: { name: 'asc' } })));
@@ -73,6 +95,12 @@ const updateExercise = asyncHandler(async (req, res) => ok(res, await prisma.exe
 
 const assignExercise = asyncHandler(async (req, res) => {
   const { patientId, exerciseId, sets, reps, durationMin, frequency, instructions, startDate, endDate } = req.body;
+  const [patient, exercise] = await Promise.all([
+    prisma.patient.findFirst({ where: { id: patientId, deletedAt: null } }),
+    prisma.exercise.findUnique({ where: { id: exerciseId } }),
+  ]);
+  if (!patient) return fail(res, 'Patient not found', 404);
+  if (!exercise) return fail(res, 'Exercise not found', 404);
   const a = await prisma.exerciseAssignment.create({
     data: { patientId, exerciseId, sets, reps, durationMin, frequency, instructions, assignedById: req.user.id, startDate: startDate ? new Date(startDate) : undefined, endDate: endDate ? new Date(endDate) : undefined },
   });
@@ -98,8 +126,15 @@ const exerciseHistory = asyncHandler(async (req, res) => {
 
 // ---- Medicines ----
 const createMedicine = asyncHandler(async (req, res) => ok(res, await prisma.medicine.create({ data: req.body }), 201));
+const listMedicines = asyncHandler(async (req, res) => ok(res, await prisma.medicine.findMany({ orderBy: { name: 'asc' } })));
 const assignMedicine = asyncHandler(async (req, res) => {
   const { patientId, medicineId, dosage, scheduleTimes, withFood, instructions } = req.body;
+  const [patient, medicine] = await Promise.all([
+    prisma.patient.findFirst({ where: { id: patientId, deletedAt: null } }),
+    prisma.medicine.findUnique({ where: { id: medicineId } }),
+  ]);
+  if (!patient) return fail(res, 'Patient not found', 404);
+  if (!medicine) return fail(res, 'Medicine not found', 404);
   const a = await prisma.medicineAssignment.create({ data: { patientId, medicineId, dosage, scheduleTimes: scheduleTimes || [], withFood: !!withFood, instructions, assignedById: req.user.id } });
   await audit(req.user.id, 'assign_medicine', 'medicine_assignments', a.id, req.ip);
   return ok(res, a, 201);
@@ -202,4 +237,4 @@ const doctorDashboard = asyncHandler(async (req, res) => {
   return ok(res, out);
 });
 
-module.exports = { createPatient, listPatients, getPatient, updatePatient, assignCaregiver, removeCaregiver, createExercise, listExercises, updateExercise, assignExercise, patientExercises, logExercise, exerciseHistory, createMedicine, assignMedicine, patientMedicines, logMedicine, medicineHistory, logSymptom, patientSymptoms, addObservation, patientObservations, listAlerts, readAlert, addNote, createReport, listReports, reportPDF, caregiverDashboard, doctorDashboard };
+module.exports = { createPatient, listPatients, getPatient, updatePatient, assignCaregiver, removeCaregiver, createCaregiver, getCaregiver, createExercise, listExercises, updateExercise, assignExercise, patientExercises, logExercise, exerciseHistory, createMedicine, listMedicines, assignMedicine, patientMedicines, logMedicine, medicineHistory, logSymptom, patientSymptoms, addObservation, patientObservations, listAlerts, readAlert, addNote, createReport, listReports, reportPDF, caregiverDashboard, doctorDashboard };

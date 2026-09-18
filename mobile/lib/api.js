@@ -2,7 +2,7 @@ import axios from 'axios';
 import * as SecureStore from 'expo-secure-store';
 import Constants from 'expo-constants';
 
-const BASE = Constants?.expoConfig?.extra?.apiUrl || process.env.API_URL || 'https://parko-api.onrender.com/api';
+const BASE = Constants?.expoConfig?.extra?.apiUrl || process.env.API_URL || 'https://parko-wxij.onrender.com/api';
 
 export const api = axios.create({ baseURL: BASE, timeout: 15000 });
 api.interceptors.request.use(async (cfg) => {
