@@ -38,7 +38,19 @@ const getPatient = asyncHandler(async (req, res) => {
 });
 
 const updatePatient = asyncHandler(async (req, res) => {
-  const patient = await prisma.patient.update({ where: { id: req.params.id }, data: req.body });
+  const { fullName, dob, gender, diagnosisStage, notes } = req.body;
+  const existing = await prisma.patient.findFirst({ where: { id: req.params.id, deletedAt: null } });
+  if (!existing) return fail(res, 'Patient not found', 404);
+  const patient = await prisma.patient.update({
+    where: { id: req.params.id },
+    data: {
+      ...(fullName !== undefined ? { fullName } : {}),
+      ...(dob !== undefined ? { dob: dob ? new Date(dob) : null } : {}),
+      ...(gender !== undefined ? { gender } : {}),
+      ...(diagnosisStage !== undefined ? { diagnosisStage } : {}),
+      ...(notes !== undefined ? { notes } : {}),
+    },
+  });
   await audit(req.user.id, 'update_patient', 'patients', patient.id, req.ip);
   return ok(res, patient);
 });
@@ -114,6 +126,9 @@ const patientExercises = asyncHandler(async (req, res) => {
 });
 
 const logExercise = asyncHandler(async (req, res) => {
+  const assignment = await prisma.exerciseAssignment.findUnique({ where: { id: req.body.assignmentId } });
+  if (!assignment) return fail(res, 'Exercise assignment not found', 404);
+  if (assignment.patientId !== req.body.patientId) return fail(res, 'Assignment does not belong to this patient', 400);
   const log = await prisma.exerciseLog.create({ data: { ...req.body, loggedById: req.user.id } });
   await audit(req.user.id, 'log_exercise', 'exercise_logs', log.id, req.ip);
   return ok(res, log, 201);
@@ -144,6 +159,9 @@ const patientMedicines = asyncHandler(async (req, res) => {
   return ok(res, list);
 });
 const logMedicine = asyncHandler(async (req, res) => {
+  const assignment = await prisma.medicineAssignment.findUnique({ where: { id: req.body.assignmentId } });
+  if (!assignment) return fail(res, 'Medicine assignment not found', 404);
+  if (assignment.patientId !== req.body.patientId) return fail(res, 'Assignment does not belong to this patient', 400);
   const log = await prisma.medicineLog.create({ data: { ...req.body, loggedById: req.user.id } });
   await evaluateAndCreateAlerts(prisma, { patientId: req.body.patientId, kind: 'medicine', payload: req.body });
   await audit(req.user.id, 'log_medicine', 'medicine_logs', log.id, req.ip);
@@ -156,6 +174,8 @@ const medicineHistory = asyncHandler(async (req, res) => {
 
 // ---- Symptoms / Observations ----
 const logSymptom = asyncHandler(async (req, res) => {
+  const patient = await prisma.patient.findFirst({ where: { id: req.body.patientId, deletedAt: null } });
+  if (!patient) return fail(res, 'Patient not found', 404);
   const log = await prisma.symptomLog.create({ data: { ...req.body, loggedById: req.user.id } });
   await evaluateAndCreateAlerts(prisma, { patientId: req.body.patientId, kind: 'symptom', payload: req.body });
   await audit(req.user.id, 'log_symptom', 'symptom_logs', log.id, req.ip);
@@ -166,6 +186,8 @@ const patientSymptoms = asyncHandler(async (req, res) => {
   return ok(res, { logs, trends: symptomTrend(logs) });
 });
 const addObservation = asyncHandler(async (req, res) => {
+  const patient = await prisma.patient.findFirst({ where: { id: req.body.patientId, deletedAt: null } });
+  if (!patient) return fail(res, 'Patient not found', 404);
   const o = await prisma.caregiverObservation.create({ data: { ...req.body, loggedById: req.user.id } });
   await evaluateAndCreateAlerts(prisma, { patientId: req.body.patientId, kind: 'observation', payload: req.body });
   await audit(req.user.id, 'add_observation', 'caregiver_observations', o.id, req.ip);
