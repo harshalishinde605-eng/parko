@@ -5,9 +5,17 @@
     "version": "1.0.0",
     "orientation": "portrait",
     "scheme": "parko-care",
+    "icon": "./assets/icon.png",
+    "splash": {
+      "backgroundColor": "#0B6E4F"
+    },
     "android": {
       "package": "com.parko.care",
-      "versionCode": 1
+      "versionCode": 1,
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/icon.png",
+        "backgroundColor": "#0B6E4F"
+      }
     },
     "extra": {
       "apiUrl": "https://parko-wxij.onrender.com/api",
