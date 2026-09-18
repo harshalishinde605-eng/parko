@@ -1,0 +1,11 @@
+{
+  "expo": {
+    "name": "PARKO Care",
+    "slug": "parko-care",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "extra": {
+      "apiUrl": "https://parko-api.onrender.com/api"
+    }
+  }
+}

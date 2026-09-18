@@ -1,0 +1,371 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
+}
+
+enum Role {
+  ADMIN
+  DOCTOR
+  CAREGIVER
+}
+
+enum LogStatus {
+  completed
+  partial
+  missed
+}
+
+enum MedStatus {
+  taken
+  missed
+  delayed
+}
+
+enum SymptomType {
+  tremor
+  stiffness
+  pain
+  fatigue
+  balance
+  walking
+  other
+}
+
+enum AlertSeverity {
+  info
+  warning
+  critical
+}
+
+enum ReportType {
+  daily
+  weekly
+  monthly
+}
+
+model User {
+  id           String    @id @default(cuid())
+  email        String    @unique
+  passwordHash String    @map("password_hash")
+  role         Role      @default(CAREGIVER)
+  fullName     String    @map("full_name")
+  isActive     Boolean   @default(true) @map("is_active")
+  deletedAt    DateTime? @map("deleted_at")
+  createdAt    DateTime  @default(now()) @map("created_at")
+  updatedAt    DateTime  @updatedAt @map("updated_at")
+
+  doctorProfile    Doctor?
+  caregiverProfile Caregiver?
+  assignedExercises ExerciseAssignment[] @relation("AssignedBy")
+  assignedMedicines MedicineAssignment[] @relation("AssignedMedsBy")
+  exerciseLogs      ExerciseLog[]        @relation("LoggedBy")
+  medicineLogs      MedicineLog[]        @relation("MedLoggedBy")
+  symptomLogs       SymptomLog[]         @relation("SymptomLoggedBy")
+  observations      CaregiverObservation[] @relation("ObservedBy")
+  doctorNotes       DoctorNote[]
+  reports           Report[]             @relation("GeneratedBy")
+  auditLogs         AuditLog[]
+  patientLinksAsCaregiver PatientCaregiver[]
+  patientLinksAsDoctor    PatientDoctor[]
+
+  @@map("users")
+  @@index([role])
+  @@index([isActive])
+}
+
+model Doctor {
+  id             String  @id @default(cuid())
+  userId         String  @unique @map("user_id")
+  user           User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  specialization String?
+  licenseNo      String? @map("license_no")
+  createdAt      DateTime @default(now()) @map("created_at")
+  updatedAt      DateTime @updatedAt @map("updated_at")
+
+  @@map("doctors")
+}
+
+model Caregiver {
+  id        String  @id @default(cuid())
+  userId    String  @unique @map("user_id")
+  user      User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  phone     String?
+  relation  String?
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@map("caregivers")
+}
+
+model Patient {
+  id             String    @id @default(cuid())
+  fullName       String    @map("full_name")
+  dob            DateTime?
+  gender         String?
+  diagnosisStage String?   @map("diagnosis_stage")
+  notes          String?
+  deletedAt      DateTime? @map("deleted_at")
+  createdAt      DateTime  @default(now()) @map("created_at")
+  updatedAt      DateTime  @updatedAt @map("updated_at")
+
+  caregivers   PatientCaregiver[]
+  doctors      PatientDoctor[]
+  exercises    ExerciseAssignment[]
+  exerciseLogs ExerciseLog[]
+  medicines    MedicineAssignment[]
+  medicineLogs MedicineLog[]
+  symptoms     SymptomLog[]
+  observations CaregiverObservation[]
+  alerts       Alert[]
+  doctorNotes  DoctorNote[]
+  reports      Report[]
+
+  @@map("patients")
+  @@index([fullName])
+}
+
+model PatientCaregiver {
+  id          String   @id @default(cuid())
+  patientId   String   @map("patient_id")
+  patient     Patient  @relation(fields: [patientId], references: [id], onDelete: Cascade)
+  caregiverId String   @map("caregiver_id")
+  caregiver   User     @relation(fields: [caregiverId], references: [id], onDelete: Cascade)
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  @@unique([patientId, caregiverId])
+  @@map("patient_caregivers")
+  @@index([caregiverId])
+}
+
+model PatientDoctor {
+  id        String   @id @default(cuid())
+  patientId String   @map("patient_id")
+  patient   Patient  @relation(fields: [patientId], references: [id], onDelete: Cascade)
+  doctorId  String   @map("doctor_id")
+  doctor    User     @relation(fields: [doctorId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@unique([patientId, doctorId])
+  @@map("patient_doctors")
+  @@index([doctorId])
+}
+
+model Exercise {
+  id          String   @id @default(cuid())
+  name        String
+  category    String?
+  description String?
+  videoUrl    String?  @map("video_url")
+  defaultSets Int?     @map("default_sets")
+  defaultReps Int?     @map("default_reps")
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  assignments ExerciseAssignment[]
+
+  @@map("exercises")
+}
+
+model ExerciseAssignment {
+  id           String    @id @default(cuid())
+  patientId    String    @map("patient_id")
+  patient      Patient   @relation(fields: [patientId], references: [id], onDelete: Cascade)
+  exerciseId   String    @map("exercise_id")
+  exercise     Exercise  @relation(fields: [exerciseId], references: [id])
+  sets         Int       @default(1)
+  reps         Int       @default(10)
+  durationMin  Int?      @map("duration_min")
+  frequency    String    @default("daily")
+  startDate    DateTime? @map("start_date")
+  endDate      DateTime? @map("end_date")
+  instructions String?
+  assignedById String    @map("assigned_by")
+  assignedBy   User      @relation("AssignedBy", fields: [assignedById], references: [id])
+  isActive     Boolean   @default(true) @map("is_active")
+  createdAt    DateTime  @default(now()) @map("created_at")
+  updatedAt    DateTime  @updatedAt @map("updated_at")
+
+  logs ExerciseLog[]
+
+  @@map("exercise_assignments")
+  @@index([patientId, isActive])
+}
+
+model ExerciseLog {
+  id           String    @id @default(cuid())
+  assignmentId String    @map("assignment_id")
+  assignment   ExerciseAssignment @relation(fields: [assignmentId], references: [id], onDelete: Cascade)
+  patientId    String    @map("patient_id")
+  patient      Patient   @relation(fields: [patientId], references: [id], onDelete: Cascade)
+  loggedById   String    @map("logged_by")
+  loggedBy     User      @relation("LoggedBy", fields: [loggedById], references: [id])
+  status       LogStatus @default(completed)
+  repsDone     Int?      @map("reps_done")
+  durationMin  Int?      @map("duration_min")
+  difficulty   Int?
+  remarks      String?
+  loggedAt     DateTime  @default(now()) @map("logged_at")
+  createdAt    DateTime  @default(now()) @map("created_at")
+
+  @@map("exercise_logs")
+  @@index([patientId, loggedAt])
+  @@index([assignmentId])
+}
+
+model Medicine {
+  id        String   @id @default(cuid())
+  name      String
+  strength  String?
+  form      String?
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  assignments MedicineAssignment[]
+
+  @@map("medicines")
+}
+
+model MedicineAssignment {
+  id           String   @id @default(cuid())
+  patientId    String   @map("patient_id")
+  patient      Patient  @relation(fields: [patientId], references: [id], onDelete: Cascade)
+  medicineId   String   @map("medicine_id")
+  medicine     Medicine @relation(fields: [medicineId], references: [id])
+  dosage       String
+  scheduleTimes Json    @default("[]") @map("schedule_times")
+  withFood     Boolean  @default(false) @map("with_food")
+  instructions String?
+  assignedById String   @map("assigned_by")
+  assignedBy   User     @relation("AssignedMedsBy", fields: [assignedById], references: [id])
+  isActive     Boolean  @default(true) @map("is_active")
+  createdAt    DateTime @default(now()) @map("created_at")
+  updatedAt    DateTime @updatedAt @map("updated_at")
+
+  logs MedicineLog[]
+
+  @@map("medicine_assignments")
+  @@index([patientId, isActive])
+}
+
+model MedicineLog {
+  id           String    @id @default(cuid())
+  assignmentId String    @map("assignment_id")
+  assignment   MedicineAssignment @relation(fields: [assignmentId], references: [id], onDelete: Cascade)
+  patientId    String    @map("patient_id")
+  patient      Patient   @relation(fields: [patientId], references: [id], onDelete: Cascade)
+  loggedById   String    @map("logged_by")
+  loggedBy     User      @relation("MedLoggedBy", fields: [loggedById], references: [id])
+  status       MedStatus @default(taken)
+  takenAt      DateTime  @default(now()) @map("taken_at")
+  remarks      String?
+  createdAt    DateTime  @default(now()) @map("created_at")
+
+  @@map("medicine_logs")
+  @@index([patientId, takenAt])
+}
+
+model SymptomLog {
+  id         String      @id @default(cuid())
+  patientId  String      @map("patient_id")
+  patient    Patient     @relation(fields: [patientId], references: [id], onDelete: Cascade)
+  loggedById String      @map("logged_by")
+  loggedBy   User        @relation("SymptomLoggedBy", fields: [loggedById], references: [id])
+  type       SymptomType
+  severity   Int
+  notes      String?
+  loggedAt   DateTime    @default(now()) @map("logged_at")
+  createdAt  DateTime    @default(now()) @map("created_at")
+
+  @@map("symptom_logs")
+  @@index([patientId, loggedAt])
+  @@index([type])
+}
+
+model CaregiverObservation {
+  id         String   @id @default(cuid())
+  patientId  String   @map("patient_id")
+  patient    Patient  @relation(fields: [patientId], references: [id], onDelete: Cascade)
+  loggedById String   @map("logged_by")
+  loggedBy   User     @relation("ObservedBy", fields: [loggedById], references: [id])
+  mood       String?
+  appetite   String?
+  sleepHours Float?   @map("sleep_hours")
+  falls      Boolean  @default(false)
+  notes      String?
+  loggedAt   DateTime @default(now()) @map("logged_at")
+  createdAt  DateTime @default(now()) @map("created_at")
+
+  @@map("caregiver_observations")
+  @@index([patientId, loggedAt])
+}
+
+model Alert {
+  id        String        @id @default(cuid())
+  patientId String        @map("patient_id")
+  patient   Patient       @relation(fields: [patientId], references: [id], onDelete: Cascade)
+  type      String
+  severity  AlertSeverity @default(info)
+  message   String
+  isRead    Boolean       @default(false) @map("is_read")
+  createdAt DateTime      @default(now()) @map("created_at")
+
+  @@map("alerts")
+  @@index([patientId, isRead])
+}
+
+model DoctorNote {
+  id        String   @id @default(cuid())
+  patientId String   @map("patient_id")
+  patient   Patient  @relation(fields: [patientId], references: [id], onDelete: Cascade)
+  doctorId  String   @map("doctor_id")
+  doctor    User     @relation(fields: [doctorId], references: [id])
+  note      String
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@map("doctor_notes")
+  @@index([patientId])
+}
+
+model Report {
+  id            String     @id @default(cuid())
+  patientId     String     @map("patient_id")
+  patient       Patient    @relation(fields: [patientId], references: [id], onDelete: Cascade)
+  type          ReportType
+  periodStart   DateTime   @map("period_start")
+  periodEnd     DateTime   @map("period_end")
+  summary       Json       @default("{}")
+  generatedById String     @map("generated_by")
+  generatedBy   User       @relation("GeneratedBy", fields: [generatedById], references: [id])
+  createdAt     DateTime   @default(now()) @map("created_at")
+
+  @@map("reports")
+  @@index([patientId, type])
+}
+
+model AuditLog {
+  id       String   @id @default(cuid())
+  userId   String?  @map("user_id")
+  user     User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
+  action   String
+  entity   String?
+  entityId String?  @map("entity_id")
+  ip       String?
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@map("audit_logs")
+  @@index([userId])
+}
+
+model Setting {
+  id        String   @id @default(cuid())
+  key       String   @unique
+  value     String
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@map("settings")
+}
