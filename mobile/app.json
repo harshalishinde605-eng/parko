@@ -4,8 +4,16 @@
     "slug": "parko-care",
     "version": "1.0.0",
     "orientation": "portrait",
+    "scheme": "parko-care",
+    "android": {
+      "package": "com.parko.care",
+      "versionCode": 1
+    },
     "extra": {
-      "apiUrl": "https://parko-wxij.onrender.com/api"
+      "apiUrl": "https://parko-wxij.onrender.com/api",
+      "eas": {
+        "projectId": "TO_BE_SET_BY_EAS_INIT"
+      }
     }
   }
 }
