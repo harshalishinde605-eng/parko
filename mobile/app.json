@@ -12,8 +12,9 @@
     "extra": {
       "apiUrl": "https://parko-wxij.onrender.com/api",
       "eas": {
-        "projectId": "TO_BE_SET_BY_EAS_INIT"
+        "projectId": "2491ca2b-5862-4a4e-b7f1-5d91bdced151"
       }
-    }
+    },
+    "owner": "harshali14s-team"
   }
 }
