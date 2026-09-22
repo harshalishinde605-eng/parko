@@ -3,6 +3,7 @@ const { asyncHandler, ok, fail } = require('../utils/apiResponse');
 const { audit } = require('../utils/audit');
 const { exerciseCompletion, medicineAdherence, symptomTrend } = require('../utils/calculations');
 const { evaluateAndCreateAlerts } = require('../utils/alerts');
+const { buildInsights, buildTimeline } = require('../utils/insights');
 const { buildReportPDF } = require('../utils/pdf');
 
 async function scopedPatientIds(user) {
@@ -106,17 +107,26 @@ const listExercises = asyncHandler(async (req, res) => ok(res, await prisma.exer
 const updateExercise = asyncHandler(async (req, res) => ok(res, await prisma.exercise.update({ where: { id: req.params.id }, data: req.body })));
 
 const assignExercise = asyncHandler(async (req, res) => {
-  const { patientId, exerciseId, sets, reps, durationMin, frequency, instructions, startDate, endDate } = req.body;
-  const [patient, exercise] = await Promise.all([
-    prisma.patient.findFirst({ where: { id: patientId, deletedAt: null } }),
-    prisma.exercise.findUnique({ where: { id: exerciseId } }),
-  ]);
+  const { patientId, exerciseId, exerciseName, exerciseCategory, exerciseDescription, sets, reps, durationMin, frequency, instructions, startDate, endDate } = req.body;
+  const patient = await prisma.patient.findFirst({ where: { id: patientId, deletedAt: null } });
   if (!patient) return fail(res, 'Patient not found', 404);
-  if (!exercise) return fail(res, 'Exercise not found', 404);
+  let exercise = null;
+  if (exerciseId) {
+    exercise = await prisma.exercise.findUnique({ where: { id: exerciseId } });
+    if (!exercise) return fail(res, 'Exercise not found', 404);
+  } else {
+    // Doctor typed a name: reuse existing exercise or create it on the fly.
+    const name = exerciseName.trim();
+    exercise = await prisma.exercise.findFirst({ where: { name: { equals: name, mode: 'insensitive' } } });
+    if (!exercise) {
+      exercise = await prisma.exercise.create({ data: { name, category: exerciseCategory, description: exerciseDescription } });
+    }
+  }
   const a = await prisma.exerciseAssignment.create({
     data: { patientId, exerciseId, sets, reps, durationMin, frequency, instructions, assignedById: req.user.id, startDate: startDate ? new Date(startDate) : undefined, endDate: endDate ? new Date(endDate) : undefined },
   });
   await audit(req.user.id, 'assign_exercise', 'exercise_assignments', a.id, req.ip);
+  await prisma.alert.create({ data: { patientId, type: 'assignment', severity: 'info', message: `New exercise assigned: ${exercise.name}` } });
   return ok(res, a, 201);
 });
 
@@ -143,15 +153,26 @@ const exerciseHistory = asyncHandler(async (req, res) => {
 const createMedicine = asyncHandler(async (req, res) => ok(res, await prisma.medicine.create({ data: req.body }), 201));
 const listMedicines = asyncHandler(async (req, res) => ok(res, await prisma.medicine.findMany({ orderBy: { name: 'asc' } })));
 const assignMedicine = asyncHandler(async (req, res) => {
-  const { patientId, medicineId, dosage, scheduleTimes, withFood, instructions } = req.body;
-  const [patient, medicine] = await Promise.all([
-    prisma.patient.findFirst({ where: { id: patientId, deletedAt: null } }),
-    prisma.medicine.findUnique({ where: { id: medicineId } }),
-  ]);
+  const { patientId, medicineId, medicineName, medicineStrength, medicineForm, dosage, scheduleTimes, withFood, instructions } = req.body;
+  const patient = await prisma.patient.findFirst({ where: { id: patientId, deletedAt: null } });
   if (!patient) return fail(res, 'Patient not found', 404);
-  if (!medicine) return fail(res, 'Medicine not found', 404);
+  let medicine = null;
+  if (medicineId) {
+    medicine = await prisma.medicine.findUnique({ where: { id: medicineId } });
+    if (!medicine) return fail(res, 'Medicine not found', 404);
+  } else {
+    // Doctor typed a name: reuse existing medicine or create it on the fly.
+    const name = medicineName.trim();
+    const where = { name: { equals: name, mode: 'insensitive' } };
+    if (medicineStrength) where.strength = medicineStrength;
+    medicine = await prisma.medicine.findFirst({ where });
+    if (!medicine) {
+      medicine = await prisma.medicine.create({ data: { name, strength: medicineStrength, form: medicineForm } });
+    }
+  }
   const a = await prisma.medicineAssignment.create({ data: { patientId, medicineId, dosage, scheduleTimes: scheduleTimes || [], withFood: !!withFood, instructions, assignedById: req.user.id } });
   await audit(req.user.id, 'assign_medicine', 'medicine_assignments', a.id, req.ip);
+  await prisma.alert.create({ data: { patientId, type: 'assignment', severity: 'info', message: `New medicine assigned: ${medicine.name}` } });
   return ok(res, a, 201);
 });
 const patientMedicines = asyncHandler(async (req, res) => {
@@ -254,9 +275,44 @@ const doctorDashboard = asyncHandler(async (req, res) => {
   for (const p of patients) {
     const from = new Date(Date.now() - 7 * 24 * 3600 * 1000);
     const stats = await gatherStats(p.id, from, new Date());
-    out.push({ patient: p, exercise: stats.exercise, meds: stats.meds, symptomAvg: stats.symptoms.avg, openAlerts: stats.alerts.filter((a) => a).length });
+    const ins = await buildInsights(prisma, p.id, 7);
+    out.push({
+      patient: p, exercise: stats.exercise, meds: stats.meds, symptomAvg: stats.symptoms.avg,
+      openAlerts: stats.alerts.filter((a) => a).length,
+      attention: ins.attention.slice(0, 3), checkins: ins.stats.checkins, falls: ins.stats.falls,
+    });
   }
   return ok(res, out);
 });
 
-module.exports = { createPatient, listPatients, getPatient, updatePatient, assignCaregiver, removeCaregiver, createCaregiver, getCaregiver, createExercise, listExercises, updateExercise, assignExercise, patientExercises, logExercise, exerciseHistory, createMedicine, listMedicines, assignMedicine, patientMedicines, logMedicine, medicineHistory, logSymptom, patientSymptoms, addObservation, patientObservations, listAlerts, readAlert, addNote, createReport, listReports, reportPDF, caregiverDashboard, doctorDashboard };
+// ---- Intelligence: timeline, insights, changes, summary, care team ----
+const patientTimeline = asyncHandler(async (req, res) => {
+  const days = Math.min(30, Math.max(1, parseInt(req.query.days || '7', 10)));
+  return ok(res, await buildTimeline(prisma, req.params.id, days));
+});
+
+const patientInsights = asyncHandler(async (req, res) => {
+  const days = Math.min(30, Math.max(1, parseInt(req.query.days || '7', 10)));
+  return ok(res, await buildInsights(prisma, req.params.id, days));
+});
+
+const patientChanges = asyncHandler(async (req, res) => {
+  const ins = await buildInsights(prisma, req.params.id, 7);
+  return ok(res, { days: 7, changes: ins.changes });
+});
+
+const patientSummary = asyncHandler(async (req, res) => {
+  const days = Math.min(30, Math.max(1, parseInt(req.query.days || '7', 10)));
+  const ins = await buildInsights(prisma, req.params.id, days);
+  return ok(res, { days, paragraphs: ins.summary.paragraphs, stats: ins.summary.stats });
+});
+
+const patientCareTeam = asyncHandler(async (req, res) => {
+  const [cgs, docs] = await Promise.all([
+    prisma.patientCaregiver.findMany({ where: { patientId: req.params.id }, include: { caregiver: { select: { id: true, fullName: true, email: true } } } }),
+    prisma.patientDoctor.findMany({ where: { patientId: req.params.id }, include: { doctor: { select: { id: true, fullName: true, email: true } } } }),
+  ]);
+  return ok(res, { caregivers: cgs.map((l) => l.caregiver), doctors: docs.map((l) => l.doctor) });
+});
+
+module.exports = { createPatient, listPatients, getPatient, updatePatient, assignCaregiver, removeCaregiver, createCaregiver, getCaregiver, createExercise, listExercises, updateExercise, assignExercise, patientExercises, logExercise, exerciseHistory, createMedicine, listMedicines, assignMedicine, patientMedicines, logMedicine, medicineHistory, logSymptom, patientSymptoms, addObservation, patientObservations, listAlerts, readAlert, addNote, createReport, listReports, reportPDF, caregiverDashboard, doctorDashboard, patientTimeline, patientInsights, patientChanges, patientSummary, patientCareTeam };

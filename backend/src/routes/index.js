@@ -51,6 +51,13 @@ router.get('/patients/:id/symptom-trends', authenticate, patientAccess, C.patien
 router.post('/observations', authenticate, authorize('CAREGIVER', 'ADMIN'), validate(observationSchema), C.addObservation);
 router.get('/patients/:id/observations', authenticate, patientAccess, C.patientObservations);
 
+// Intelligence: timeline, insights, changes, summary, care team
+router.get('/patients/:id/timeline', authenticate, patientAccess, C.patientTimeline);
+router.get('/patients/:id/insights', authenticate, patientAccess, C.patientInsights);
+router.get('/patients/:id/changes', authenticate, patientAccess, C.patientChanges);
+router.get('/patients/:id/summary', authenticate, patientAccess, C.patientSummary);
+router.get('/patients/:id/care-team', authenticate, patientAccess, C.patientCareTeam);
+
 // Notes, alerts, reports, dashboards
 router.post('/notes', authenticate, authorize('DOCTOR', 'ADMIN'), C.addNote);
 router.get('/alerts', authenticate, C.listAlerts);

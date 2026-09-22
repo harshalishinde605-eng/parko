@@ -11,6 +11,7 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Picker } from '@react-native-picker/picker';
+import { Ionicons } from '@expo/vector-icons';
 import { C, R, T, STATUS_STYLE } from './theme';
 
 export function Screen({ children, refreshing, onRefresh, pad = 16 }) {
@@ -174,6 +175,75 @@ export function Loader({ children = 'Loading…' }) {
   );
 }
 
+const LEVEL = {
+  red: { bg: C.dangerSoft, fg: C.danger, icon: 'alert-circle' },
+  amber: { bg: C.warnSoft, fg: C.warn, icon: 'warning' },
+  green: { bg: C.okSoft, fg: C.ok, icon: 'checkmark-circle' },
+  info: { bg: C.infoSoft, fg: C.info, icon: 'information-circle' },
+};
+
+export function AttentionItem({ level = 'info', title, detail, sub, onPress }) {
+  const L = LEVEL[level] || LEVEL.info;
+  const body = (
+    <View style={[s.att, { backgroundColor: L.bg, borderColor: L.fg }]}>
+      <Ionicons name={L.icon} size={22} color={L.fg} style={{ marginTop: 1 }} />
+      <View style={{ flex: 1 }}>
+        {!!sub && <Text style={[T.tiny, { color: L.fg, fontWeight: '700' }]}>{sub}</Text>}
+        <Text style={[T.body, { fontWeight: '700' }]}>{title}</Text>
+        {!!detail && <Text style={T.muted}>{detail}</Text>}
+      </View>
+      {!!onPress && <Ionicons name="chevron-forward" size={20} color={L.fg} />}
+    </View>
+  );
+  if (!onPress) return body;
+  return <TouchableOpacity onPress={onPress} activeOpacity={0.8}>{body}</TouchableOpacity>;
+}
+
+export function Dots({ values = [], labels }) {
+  const days = ['M', 'T', 'W', 'T', 'F', 'S', 'S'];
+  return (
+    <View style={s.dots}>
+      {values.map((v, i) => (
+        <View key={i} style={s.dotCol}>
+          <View style={[s.dot, { backgroundColor: v ? C.primary : '#DCE7E2' }]}>
+            {v ? <Ionicons name="checkmark" size={12} color={C.white} /> : null}
+          </View>
+          <Text style={T.tiny}>{(labels || days)[i % 7]}</Text>
+        </View>
+      ))}
+    </View>
+  );
+}
+
+export function MiniBars({ bars = [], color = C.primary, height = 72 }) {
+  const max = Math.max(1, ...bars.map((b) => b.value));
+  return (
+    <View style={[s.mbars, { height: height + 20 }]}>
+      {bars.map((b, i) => (
+        <View key={i} style={s.mbarCol}>
+          <View style={{ flex: 1, justifyContent: 'flex-end' }}>
+            <View style={{ height: Math.max(3, (b.value / max) * height), backgroundColor: b.color || color, borderRadius: 4 }} />
+          </View>
+          <Text style={T.tiny}>{b.label}</Text>
+        </View>
+      ))}
+    </View>
+  );
+}
+
+export function BigButton({ title, sub, icon = 'flash', onPress }) {
+  return (
+    <TouchableOpacity onPress={onPress} activeOpacity={0.85} style={s.big}>
+      <Ionicons name={icon} size={30} color={C.white} />
+      <View style={{ flex: 1 }}>
+        <Text style={{ color: C.white, fontSize: 17, fontWeight: '800' }}>{title}</Text>
+        {!!sub && <Text style={{ color: 'rgba(255,255,255,0.85)', fontSize: 12 }}>{sub}</Text>}
+      </View>
+      <Ionicons name="chevron-forward" size={22} color={C.white} />
+    </TouchableOpacity>
+  );
+}
+
 const s = StyleSheet.create({
   card: { backgroundColor: C.card, borderRadius: R.md, padding: 14, marginBottom: 12, borderWidth: 1, borderColor: C.line },
   btn: { borderRadius: 12, paddingVertical: 13, alignItems: 'center', marginTop: 6 },
@@ -199,4 +269,11 @@ const s = StyleSheet.create({
   row: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   banner: { borderWidth: 1, borderRadius: 12, padding: 12, marginBottom: 12 },
   empty: { padding: 24, alignItems: 'center' },
+  att: { flexDirection: 'row', gap: 10, borderWidth: 1, borderRadius: 12, padding: 12, marginBottom: 8, alignItems: 'flex-start' },
+  dots: { flexDirection: 'row', justifyContent: 'space-between', marginTop: 8 },
+  dotCol: { alignItems: 'center', gap: 4 },
+  dot: { width: 26, height: 26, borderRadius: 13, alignItems: 'center', justifyContent: 'center' },
+  mbars: { flexDirection: 'row', gap: 6, marginTop: 8 },
+  mbarCol: { flex: 1, alignItems: 'center', gap: 4 },
+  big: { flexDirection: 'row', alignItems: 'center', gap: 12, backgroundColor: C.primary, borderRadius: 16, padding: 16, marginBottom: 12 },
 });

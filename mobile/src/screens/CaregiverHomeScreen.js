@@ -4,7 +4,8 @@ import { useFocusEffect } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
 import { api, errMsg } from '../../lib/api';
 import { useAuth } from '../auth';
-import { Screen, Card, Title, Banner, Loader, Empty, Chip, Row, Bar } from '../ui';
+import { Screen, Card, Title, Banner, Loader, Empty, Chip, Row, Bar, Dots } from '../ui';
+import QuickEvent from '../QuickEvent';
 import { C, T } from '../theme';
 
 export default function CaregiverHomeScreen({ navigation }) {
@@ -13,6 +14,8 @@ export default function CaregiverHomeScreen({ navigation }) {
   const [alerts, setAlerts] = useState([]);
   const [sel, setSel] = useState(null);
   const [tasks, setTasks] = useState({ ex: [], meds: [] });
+  const [dots, setDots] = useState([]);
+  const [checkins, setCheckins] = useState(0);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState('');
@@ -33,6 +36,10 @@ export default function CaregiverHomeScreen({ navigation }) {
           api.get(`/patients/${id}/medicines`),
         ]);
         setTasks({ ex: ex.data.data || [], meds: md.data.data || [] });
+        api.get(`/patients/${id}/insights?days=7`).then((r) => {
+          setDots(r.data.data?.stats?.dots || []);
+          setCheckins(r.data.data?.stats?.checkins ?? 0);
+        }).catch(() => {});
       }
     } catch (e) {
       setError(errMsg(e));
@@ -75,6 +82,13 @@ export default function CaregiverHomeScreen({ navigation }) {
               </Card>
             </TouchableOpacity>
           )}
+          {dots.length > 0 && (
+            <Card>
+              <Row between><Text style={T.h3}>This week: {checkins}/7 days recorded</Text></Row>
+              <Dots values={dots} />
+            </Card>
+          )}
+          <QuickEvent patientId={sel} onSaved={() => load(true)} />
           <Text style={[T.h2, { marginTop: 8, marginBottom: 10 }]}>Today's exercises ({tasks.ex.length})</Text>
           {tasks.ex.length === 0 && <Text style={T.muted}>None assigned.</Text>}
           {tasks.ex.map((a) => (
