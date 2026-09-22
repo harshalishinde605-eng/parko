@@ -1,6 +1,6 @@
 import React, { createContext, useContext, useEffect, useMemo, useState } from 'react';
 import * as SecureStore from 'expo-secure-store';
-import { api, saveTokens, clearTokens, setOnUnauthorized } from '../lib/api';
+import { api, saveTokens, clearTokens, setOnUnauthorized, wakeServer } from '../lib/api';
 
 const AuthCtx = createContext(null);
 export const useAuth = () => useContext(AuthCtx);
@@ -16,6 +16,8 @@ export function AuthProvider({ children }) {
       try {
         const at = await SecureStore.getItemAsync('accessToken');
         if (!at) return;
+        // Warm a possibly-sleeping server before validating the session.
+        await wakeServer();
         const { data } = await api.get('/auth/me');
         // /auth/me returns the session payload {id, role, email, fullName}
         setUser(data.data);

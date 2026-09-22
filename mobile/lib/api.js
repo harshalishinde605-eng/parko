@@ -7,7 +7,8 @@ export const BASE_URL =
   process.env.API_URL ||
   'https://parko-wxij.onrender.com/api';
 
-export const api = axios.create({ baseURL: BASE_URL, timeout: 25000 });
+// 90s: Render free tier cold-starts (~25s) after idle; short timeouts falsely report "server down".
+export const api = axios.create({ baseURL: BASE_URL, timeout: 90000 });
 
 let onUnauthorized = null;
 export const setOnUnauthorized = (fn) => {
@@ -35,7 +36,7 @@ api.interceptors.response.use(
           (async () => {
             const rt = await SecureStore.getItemAsync('refreshToken');
             if (!rt) throw new Error('no-refresh');
-            const { data } = await axios.post(`${BASE_URL}/auth/refresh`, { refreshToken: rt }, { timeout: 15000 });
+            const { data } = await axios.post(`${BASE_URL}/auth/refresh`, { refreshToken: rt }, { timeout: 30000 });
             await SecureStore.setItemAsync('accessToken', data.data.accessToken);
             return data.data.accessToken;
           })();
@@ -50,6 +51,15 @@ api.interceptors.response.use(
         return Promise.reject(error);
       }
     }
+    // One silent retry on network timeout (cold start): only for safe calls —
+    // GETs plus login/refresh (no side effects). Never auto-retry data writes.
+    const method = (orig.method || 'get').toLowerCase();
+    const safeRetry =
+      !error.response && !orig._timeoutRetried && (method === 'get' || url.includes('/auth/login') || url.includes('/auth/refresh'));
+    if (safeRetry) {
+      orig._timeoutRetried = true;
+      return api(orig);
+    }
     return Promise.reject(error);
   }
 );
@@ -63,10 +73,25 @@ export const saveTokens = (access, refresh) =>
 export const clearTokens = () =>
   Promise.all([SecureStore.deleteItemAsync('accessToken'), SecureStore.deleteItemAsync('refreshToken')]);
 
+// Best-effort wake-up ping for sleeping free-tier servers. Never throws.
+export async function wakeServer() {
+  try {
+    await axios.get(`${BASE_URL}/health`, { timeout: 90000 });
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 // Human-friendly message for any API failure (validation-aware, never leaks internals).
 export function errMsg(e, fallback = 'Something went wrong. Please try again.') {
   const d = e?.response?.data;
-  if (!d) return e?.message === 'Network Error' ? 'No connection to the server. Check internet and retry.' : fallback;
+  if (!d) {
+    if (e?.code === 'ECONNABORTED' || (e?.message || '').toLowerCase().includes('timeout')) {
+      return 'Server is waking up. Please wait a few seconds and try again.';
+    }
+    return e?.message === 'Network Error' ? 'No connection to the server. Check internet and retry.' : fallback;
+  }
   if (d.details?.fieldErrors) {
     const parts = Object.entries(d.details.fieldErrors).map(([k, v]) => `${k}: ${[]
       .concat(v)
