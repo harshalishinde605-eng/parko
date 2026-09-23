@@ -4,7 +4,7 @@ import { useFocusEffect } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
 import { api, errMsg } from '../../lib/api';
 import { useAuth } from '../auth';
-import { Screen, Card, Btn, Field, Banner, Loader, Empty, Row, Bar, AttentionItem } from '../ui';
+import { Screen, Card, Btn, Field, Banner, Loader, Empty, Row, Bar, AttentionItem, Hero, StatTile, SectionHead } from '../ui';
 import { C, T } from '../theme';
 
 function greeting() {
@@ -65,22 +65,26 @@ export default function DoctorHomeScreen({ navigation }) {
   const ambers = attention.filter((a) => a.level === 'amber');
   const q = query.trim().toLowerCase();
   const filtered = q ? rows.filter((r) => r.patient.fullName.toLowerCase().includes(q)) : rows;
-  const first = (user?.fullName || '').split(' ')[0];
+  const first = (user?.fullName || '').replace(/^dr\.?\s+/i, '').split(' ')[0];
 
   return (
     <Screen refreshing={refreshing} onRefresh={() => { setRefreshing(true); load(true); }}>
-      <Text style={T.h1}>{greeting()}{first ? `, ${first}` : ''}</Text>
-      <Text style={[T.muted, { marginBottom: 12 }]}>Here is what your recorded care data needs this week.</Text>
+      <Hero
+        kicker="Doctor dashboard"
+        title={`${greeting()}${first ? `, ${first}` : ''}`}
+        sub="Recorded care across your patients, organized for review."
+        right={<Ionicons name="medkit" size={30} color="rgba(255,255,255,0.9)" />}
+      />
       {!!error && <Banner kind="danger">{error}</Banner>}
       <Row>
-        <Card style={{ flex: 1 }}><Text style={T.h1}>{rows.length}</Text><Text style={T.muted}>Patients</Text></Card>
-        <Card style={{ flex: 1 }}><Text style={[T.h1, { color: openAlerts ? C.danger : C.ink }]}>{openAlerts}</Text><Text style={T.muted}>Open alerts</Text></Card>
-        <Card style={{ flex: 1 }}><Text style={[T.h1, { color: reds.length ? C.danger : C.ok }]}>{reds.length}</Text><Text style={T.muted}>Urgent</Text></Card>
+        <StatTile value={rows.length} label="PATIENTS" />
+        <StatTile value={openAlerts} label="OPEN ALERTS" color={openAlerts ? C.danger : C.ink} />
+        <StatTile value={reds.length} label="URGENT" color={reds.length ? C.danger : C.ok} />
       </Row>
 
       {loading ? <Loader /> : (
         <>
-          <Text style={[T.h2, { marginTop: 6, marginBottom: 8 }]}>Needs your attention</Text>
+          <SectionHead title="Needs your attention" />
           {attention.length === 0 && <Banner kind="ok">Nothing recorded needs review right now.</Banner>}
           {reds.concat(ambers).slice(0, 5).map((a, i) => (
             <AttentionItem
@@ -93,25 +97,29 @@ export default function DoctorHomeScreen({ navigation }) {
             />
           ))}
 
-          <Text style={[T.h2, { marginTop: 10, marginBottom: 8 }]}>Your patients ({rows.length})</Text>
+          <SectionHead title={`Your patients (${rows.length})`} />
           <Field placeholder="Search registered patients…" value={query} onChangeText={setQuery} />
-          {filtered.length === 0 && <Empty>{rows.length ? 'No match for your search.' : 'No patients yet. Add your first patient below.'}</Empty>}
+          {filtered.length === 0 && <Empty>{rows.length ? 'No match for your search.' : 'No patients yet. Register your first patient below.'}</Empty>}
           {filtered.map((r) => (
-            <TouchableOpacity key={r.patient.id} onPress={() => navigation.navigate('PatientDetail', { patientId: r.patient.id, patientName: r.patient.fullName })} activeOpacity={0.8}>
+            <TouchableOpacity key={r.patient.id} onPress={() => navigation.navigate('PatientDetail', { patientId: r.patient.id, patientName: r.patient.fullName })} activeOpacity={0.85}>
               <Card>
                 <Row between>
-                  <Text style={T.h2}>{r.patient.fullName}</Text>
-                  <Ionicons name="chevron-forward" size={20} color={C.muted} />
+                  <View style={{ flex: 1 }}>
+                    <Text style={T.h2}>{r.patient.fullName}</Text>
+                    {!!r.patient.diagnosisStage && <Text style={T.muted}>{r.patient.diagnosisStage}</Text>}
+                  </View>
+                  <View style={{ width: 36, height: 36, borderRadius: 18, backgroundColor: C.primarySoft, alignItems: 'center', justifyContent: 'center' }}>
+                    <Ionicons name="chevron-forward" size={20} color={C.primary} />
+                  </View>
                 </Row>
-                {!!r.patient.diagnosisStage && <Text style={T.muted}>{r.patient.diagnosisStage}</Text>}
-                <View style={{ marginTop: 8 }}>
+                <View style={{ marginTop: 10 }}>
                   <Text style={T.tiny}>EXERCISE {r.exercise?.completionPct ?? 0}%</Text>
                   <Bar pct={r.exercise?.completionPct ?? 0} />
                   <Text style={[T.tiny, { marginTop: 6 }]}>MEDICATION {r.meds?.adherencePct ?? 0}%</Text>
                   <Bar pct={r.meds?.adherencePct ?? 0} color={C.info} />
                 </View>
                 {(r.attention || []).length > 0 && (
-                  <Row><Ionicons name="alert-circle" size={14} color={r.attention[0].level === 'red' ? C.danger : C.warn} /><Text style={[T.tiny, { color: r.attention[0].level === 'red' ? C.danger : C.warn }]}>{r.attention[0].title}</Text></Row>
+                  <Row><Ionicons name="alert-circle" size={14} color={r.attention[0].level === 'red' ? C.danger : C.warn} /><Text style={[T.tiny, { color: r.attention[0].level === 'red' ? C.danger : C.warn, fontWeight: '700' }]}>{r.attention[0].title}</Text></Row>
                 )}
               </Card>
             </TouchableOpacity>

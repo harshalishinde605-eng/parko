@@ -12,7 +12,7 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Picker } from '@react-native-picker/picker';
 import { Ionicons } from '@expo/vector-icons';
-import { C, R, T, STATUS_STYLE } from './theme';
+import { C, R, T, SH, STATUS_STYLE } from './theme';
 
 export function Screen({ children, refreshing, onRefresh, pad = 16 }) {
   return (
@@ -244,8 +244,44 @@ export function BigButton({ title, sub, icon = 'flash', onPress }) {
   );
 }
 
+export function Hero({ kicker, title, sub, right }) {
+  return (
+    <View style={s.hero}>
+      <View style={{ flex: 1 }}>
+        {!!kicker && <Text style={s.heroKicker}>{kicker}</Text>}
+        <Text style={T.heroTitle}>{title}</Text>
+        {!!sub && <Text style={[T.heroSub, { marginTop: 4 }]}>{sub}</Text>}
+      </View>
+      {!!right && <View style={s.heroRight}>{right}</View>}
+    </View>
+  );
+}
+
+export function StatTile({ value, label, color = C.ink, bg = C.card, sub }) {
+  return (
+    <View style={[s.tile, { backgroundColor: bg }, SH.card]}>
+      <Text style={[T.h1, { color }]}>{value}</Text>
+      <Text style={[T.tiny, { fontWeight: '700' }]}>{label}</Text>
+      {!!sub && <Text style={T.tiny}>{sub}</Text>}
+    </View>
+  );
+}
+
+export function SectionHead({ title, action, onAction }) {
+  return (
+    <View style={[s.row, { justifyContent: 'space-between', marginTop: 18, marginBottom: 10 }]}>
+      <Text style={T.h2}>{title}</Text>
+      {!!action && (
+        <TouchableOpacity onPress={onAction}>
+          <Text style={{ color: C.primary, fontWeight: '700', fontSize: 13 }}>{action}</Text>
+        </TouchableOpacity>
+      )}
+    </View>
+  );
+}
+
 const s = StyleSheet.create({
-  card: { backgroundColor: C.card, borderRadius: R.md, padding: 14, marginBottom: 12, borderWidth: 1, borderColor: C.line },
+  card: { backgroundColor: C.card, borderRadius: R.md, padding: 14, marginBottom: 12, borderWidth: 1, borderColor: C.line, ...SH.card },
   btn: { borderRadius: 12, paddingVertical: 13, alignItems: 'center', marginTop: 6 },
   btnGhost: { borderWidth: 1, borderColor: C.primary },
   btnT: { fontSize: 15, fontWeight: '700' },
@@ -275,5 +311,9 @@ const s = StyleSheet.create({
   dot: { width: 26, height: 26, borderRadius: 13, alignItems: 'center', justifyContent: 'center' },
   mbars: { flexDirection: 'row', gap: 6, marginTop: 8 },
   mbarCol: { flex: 1, alignItems: 'center', gap: 4 },
-  big: { flexDirection: 'row', alignItems: 'center', gap: 12, backgroundColor: C.primary, borderRadius: 16, padding: 16, marginBottom: 12 },
+  big: { flexDirection: 'row', alignItems: 'center', gap: 12, backgroundColor: C.primary, borderRadius: 16, padding: 16, marginBottom: 12, ...SH.card },
+  hero: { backgroundColor: C.primaryDeep, borderRadius: R.lg, padding: 18, marginBottom: 14, flexDirection: 'row', alignItems: 'center', gap: 12, ...SH.card },
+  heroKicker: { color: C.accent, fontSize: 11, fontWeight: '800', letterSpacing: 1.5, textTransform: 'uppercase', marginBottom: 4 },
+  heroRight: { width: 56, height: 56, borderRadius: 28, backgroundColor: 'rgba(255,255,255,0.14)', alignItems: 'center', justifyContent: 'center' },
+  tile: { flex: 1, borderRadius: R.md, padding: 12, borderWidth: 1, borderColor: C.line },
 });

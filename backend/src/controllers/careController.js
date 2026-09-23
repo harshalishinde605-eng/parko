@@ -104,7 +104,12 @@ const getCaregiver = asyncHandler(async (req, res) => {
 // ---- Exercises ----
 const createExercise = asyncHandler(async (req, res) => ok(res, await prisma.exercise.create({ data: req.body }), 201));
 const listExercises = asyncHandler(async (req, res) => ok(res, await prisma.exercise.findMany({ orderBy: { name: 'asc' } })));
-const updateExercise = asyncHandler(async (req, res) => ok(res, await prisma.exercise.update({ where: { id: req.params.id }, data: req.body })));
+const updateExercise = asyncHandler(async (req, res) => {
+  const existing = await prisma.exercise.findUnique({ where: { id: req.params.id } });
+  if (!existing) return fail(res, 'Exercise not found', 404);
+  const { name, category, description, videoUrl, defaultSets, defaultReps } = req.body;
+  return ok(res, await prisma.exercise.update({ where: { id: req.params.id }, data: { name, category, description, videoUrl, defaultSets, defaultReps } }));
+});
 
 const assignExercise = asyncHandler(async (req, res) => {
   const { patientId, exerciseId, exerciseName, exerciseCategory, exerciseDescription, sets, reps, durationMin, frequency, instructions, startDate, endDate } = req.body;
@@ -222,7 +227,11 @@ const listAlerts = asyncHandler(async (req, res) => {
   const alerts = await prisma.alert.findMany({ where: { ...(ids ? { patientId: { in: ids } } : {}), ...(req.query.unread === 'true' ? { isRead: false } : {}) }, orderBy: { createdAt: 'desc' }, take: 100 });
   return ok(res, alerts);
 });
-const readAlert = asyncHandler(async (req, res) => ok(res, await prisma.alert.update({ where: { id: req.params.id }, data: { isRead: true } })));
+const readAlert = asyncHandler(async (req, res) => {
+  const existing = await prisma.alert.findUnique({ where: { id: req.params.id } });
+  if (!existing) return fail(res, 'Alert not found', 404);
+  return ok(res, await prisma.alert.update({ where: { id: req.params.id }, data: { isRead: true } }));
+});
 
 // ---- Notes / Reports / Dashboard ----
 const addNote = asyncHandler(async (req, res) => {

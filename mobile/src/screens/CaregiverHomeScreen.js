@@ -4,7 +4,7 @@ import { useFocusEffect } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
 import { api, errMsg } from '../../lib/api';
 import { useAuth } from '../auth';
-import { Screen, Card, Title, Banner, Loader, Empty, Chip, Row, Bar, Dots } from '../ui';
+import { Screen, Card, Title, Banner, Loader, Empty, Chip, Row, Bar, Dots, Hero, StatTile } from '../ui';
 import QuickEvent from '../QuickEvent';
 import { C, T } from '../theme';
 
@@ -55,7 +55,12 @@ export default function CaregiverHomeScreen({ navigation }) {
 
   return (
     <Screen refreshing={refreshing} onRefresh={() => { setRefreshing(true); load(true); }}>
-      <Title sub={`Signed in as ${user?.fullName || ''}`}>Today's care</Title>
+      <Hero
+        kicker="Caregiver · today"
+        title="Today's care"
+        sub={user?.fullName ? `Signed in as ${user.fullName}` : 'Daily tasks and quick events'}
+        right={<Ionicons name="sunny" size={30} color="rgba(255,255,255,0.9)" />}
+      />
       {!!error && <Banner kind="danger">{error}</Banner>}
       {loading ? <Loader /> : patients.length === 0 ? (
         <Empty>No patient assigned yet. Ask your doctor to link your account to a patient.</Empty>

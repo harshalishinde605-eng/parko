@@ -3,7 +3,7 @@ import { View, Text } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
 import { api, errMsg } from '../../lib/api';
-import { Screen, Card, Btn, Field, Seg, Title, Banner, Loader, SectionTitle, Chip, Row, Bar, Dots, MiniBars, AttentionItem } from '../ui';
+import { Screen, Card, Btn, Field, Seg, Title, Banner, Loader, SectionTitle, Chip, Row, Bar, Dots, MiniBars, AttentionItem, Hero, StatTile } from '../ui';
 import { C, T } from '../theme';
 
 const TABS = [
@@ -91,9 +91,12 @@ export default function PatientDetailScreen({ route }) {
 
   return (
     <Screen refreshing={refreshing} onRefresh={() => { setRefreshing(true); load(true); }}>
-      <Title sub={[ageOf(patient?.dob), patient?.diagnosisStage, cg ? `Caregiver: ${cg.fullName}` : 'No caregiver linked'].filter(Boolean).join(' · ')}>
-        {patient?.fullName || 'Patient'}
-      </Title>
+      <Hero
+        kicker="Patient overview"
+        title={patient?.fullName || 'Patient'}
+        sub={[ageOf(patient?.dob), patient?.diagnosisStage, cg ? `Caregiver: ${cg.fullName}` : 'No caregiver linked'].filter(Boolean).join(' · ')}
+        right={<Ionicons name="person" size={30} color="rgba(255,255,255,0.9)" />}
+      />
       {!!error && <Banner kind="danger">{error}</Banner>}
       {!!okMsg && <Banner kind="ok">{okMsg}</Banner>}
       <Seg options={TABS} value={tab} onChange={setTab} />
