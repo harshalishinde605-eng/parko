@@ -123,7 +123,7 @@ const assignExercise = asyncHandler(async (req, res) => {
     }
   }
   const a = await prisma.exerciseAssignment.create({
-    data: { patientId, exerciseId, sets, reps, durationMin, frequency, instructions, assignedById: req.user.id, startDate: startDate ? new Date(startDate) : undefined, endDate: endDate ? new Date(endDate) : undefined },
+    data: { patientId, exerciseId: exercise.id, sets, reps, durationMin, frequency, instructions, assignedById: req.user.id, startDate: startDate ? new Date(startDate) : undefined, endDate: endDate ? new Date(endDate) : undefined },
   });
   await audit(req.user.id, 'assign_exercise', 'exercise_assignments', a.id, req.ip);
   await prisma.alert.create({ data: { patientId, type: 'assignment', severity: 'info', message: `New exercise assigned: ${exercise.name}` } });
@@ -170,7 +170,7 @@ const assignMedicine = asyncHandler(async (req, res) => {
       medicine = await prisma.medicine.create({ data: { name, strength: medicineStrength, form: medicineForm } });
     }
   }
-  const a = await prisma.medicineAssignment.create({ data: { patientId, medicineId, dosage, scheduleTimes: scheduleTimes || [], withFood: !!withFood, instructions, assignedById: req.user.id } });
+  const a = await prisma.medicineAssignment.create({ data: { patientId, medicineId: medicine.id, dosage, scheduleTimes: scheduleTimes || [], withFood: !!withFood, instructions, assignedById: req.user.id } });
   await audit(req.user.id, 'assign_medicine', 'medicine_assignments', a.id, req.ip);
   await prisma.alert.create({ data: { patientId, type: 'assignment', severity: 'info', message: `New medicine assigned: ${medicine.name}` } });
   return ok(res, a, 201);
