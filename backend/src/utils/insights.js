@@ -88,20 +88,21 @@ function changesFor(curW, prevW) {
   const exSess = (w) => w.exLogs.filter((l) => l.status !== 'missed').length;
   const medTaken = (w) => w.medLogs.filter((l) => l.status === 'taken').length;
   const rows = [
-    { domain: 'Medication records', cur: medTaken(curW), prev: medTaken(prevW), unit: 'taken' },
-    { domain: 'Exercise', cur: exSess(curW), prev: exSess(prevW), unit: 'sessions recorded' },
-    { domain: 'Walking difficulty', cur: walk(curW), prev: walk(prevW), unit: 'entries' },
-    { domain: 'Falls', cur: falls(curW), prev: falls(prevW), unit: 'recorded' },
-    { domain: 'Severe entries (≥8)', cur: sev(curW), prev: sev(prevW), unit: 'entries' },
+    { domain: 'Medication records', cur: medTaken(curW), prev: medTaken(prevW), one: 'taken dose', many: 'taken doses' },
+    { domain: 'Exercise', cur: exSess(curW), prev: exSess(prevW), one: 'session', many: 'sessions' },
+    { domain: 'Walking difficulty', cur: walk(curW), prev: walk(prevW), one: 'entry', many: 'entries' },
+    { domain: 'Falls', cur: falls(curW), prev: falls(prevW), one: 'fall', many: 'falls' },
+    { domain: 'Severe entries (8+)', cur: sev(curW), prev: sev(prevW), one: 'entry', many: 'entries' },
   ];
   return rows.map((r) => {
     const d = r.cur - r.prev;
     const tone = r.domain.startsWith('Walking') || r.domain.startsWith('Falls') || r.domain.startsWith('Severe')
-      ? (d > 0 ? 'amber' : d < 0 ? 'green' : 'green')
+      ? (d > 0 ? 'amber' : 'green')
       : (d < 0 ? 'amber' : 'green');
+    const unit = Math.abs(d) === 1 ? r.one : r.many;
     const text = d === 0
       ? `No major change in recorded ${r.domain.toLowerCase()} (${r.cur} vs ${r.prev}).`
-      : `${Math.abs(d)} ${Math.abs(d) === 1 ? r.unit.replace(/s$/, '') : r.unit} ${d > 0 ? 'more' : 'fewer'} recorded (${r.cur} vs ${r.prev}).`;
+      : `${Math.abs(d)} ${unit} ${d > 0 ? 'more' : 'fewer'} recorded than the previous period (${r.cur} vs ${r.prev}).`;
     return { ...r, delta: d, tone, text };
   });
 }
