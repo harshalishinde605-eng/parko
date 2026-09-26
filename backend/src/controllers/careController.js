@@ -208,6 +208,9 @@ const logExercise = asyncHandler(async (req, res) => {
   const aiData = aiSupported && aiAssisted ? { aiAssisted: true, detectedReps, durationSec, avgConfidence, romSummary, formNotes } : {};
   const fbData = fbSupported && feedbackReason ? { feedbackReason } : {};
   const log = await prisma.exerciseLog.create({ data: { ...rest, ...aiData, ...fbData, loggedById: req.user.id } });
+  if (feedbackReason && !fbSupported) {
+    try { await prisma.$executeRawUnsafe('UPDATE exercise_logs SET feedback_reason = $1 WHERE id = $2', feedbackReason, log.id); } catch { /* column missing on very old DBs */ }
+  }
   await audit(req.user.id, 'log_exercise', 'exercise_logs', log.id, req.ip);
   // Rehab rule: repeated difficult sessions → one warning alert (deduped weekly).
   if ((req.body.difficulty || 0) >= 4) {
@@ -540,6 +543,15 @@ const patientProgress = asyncHandler(async (req, res) => {
   });
   const observations = await prisma.caregiverObservation.findMany({ where: { patientId }, orderBy: { loggedAt: 'desc' }, take: 10 });
   const goals = (await listGoalsSafe(prisma, patientId)).filter((g) => g.status === 'active');
+  // Backfill reasons via raw SQL when the generated client predates the column.
+  try {
+    const ids = feedback.map((l) => l.id).filter(Boolean);
+    if (ids.length) {
+      const rows = await prisma.$queryRawUnsafe('SELECT id, feedback_reason AS "feedbackReason" FROM exercise_logs WHERE id = ANY($1)', ids);
+      const map = Object.fromEntries(rows.map((r) => [r.id, r.feedbackReason]));
+      feedback.forEach((l) => { if (l.feedbackReason == null && map[l.id] != null) l.feedbackReason = map[l.id]; });
+    }
+  } catch { /* column missing — reasons simply unavailable */ }
   return ok(res, {
     adherenceWeeks: weeks,
     latestAssessment: assessments[0] || null,
