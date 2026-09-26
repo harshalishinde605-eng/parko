@@ -354,22 +354,27 @@ const doctorDashboardV2 = asyncHandler(async (req, res) => {
   const patientsOut = [];
   const attentionPatients = [];
   for (const p of patients) {
-    const ins = await buildInsights(prisma, p.id, 7);
-    const row = {
-      patientId: p.id,
-      name: p.fullName,
-      diagnosisStage: p.diagnosisStage,
-      medicationRate: ins.stats.meds.adherencePct,
-      exerciseRate: ins.stats.exercise.completionPct,
-      checkInRate: Math.round((ins.stats.checkins / 7) * 1000) / 10,
-      walkingDifficultyRecords: ins.stats.walking,
-      tremorRecords: (ins.dayBars?.tremor || []).reduce((a, b) => a + b.count, 0),
-      falls: ins.stats.falls,
-      lastActive: lastActive[p.id] ? new Date(lastActive[p.id]).toISOString() : null,
-      attention: ins.attention.slice(0, 3),
-    };
-    patientsOut.push(row);
-    if (ins.attention.some((a) => a.level === 'red' || a.level === 'amber')) attentionPatients.push(row);
+    try {
+      const ins = await buildInsights(prisma, p.id, 7);
+      const row = {
+        patientId: p.id,
+        name: p.fullName,
+        diagnosisStage: p.diagnosisStage,
+        medicationRate: ins.stats.meds.adherencePct,
+        exerciseRate: ins.stats.exercise.completionPct,
+        checkInRate: Math.round((ins.stats.checkins / 7) * 1000) / 10,
+        walkingDifficultyRecords: ins.stats.walking,
+        tremorRecords: (ins.dayBars?.tremor || []).reduce((a, b) => a + b.count, 0),
+        falls: ins.stats.falls,
+        lastActive: lastActive[p.id] ? new Date(lastActive[p.id]).toISOString() : null,
+        attention: ins.attention.slice(0, 3),
+      };
+      patientsOut.push(row);
+      if (ins.attention.some((a) => a.level === 'red' || a.level === 'amber')) attentionPatients.push(row);
+    } catch (e) {
+      const { logger } = require('../utils/logger');
+      logger.error('dashboard patient skipped', { patientId: p.id, error: e.message });
+    }
   }
 
   const feed = [
@@ -380,18 +385,25 @@ const doctorDashboardV2 = asyncHandler(async (req, res) => {
   ].sort((a, b) => new Date(b.at) - new Date(a.at)).slice(0, 15);
 
   let snapshot = null;
+  let snapshotError = null;
   const snapPatient = attentionPatients[0] || patientsOut[0];
   if (snapPatient) {
-    const s = await generateSnapshot(prisma, { patientId: snapPatient.patientId, doctorId: req.user.id, days: 7 });
-    const p = byId[snapPatient.patientId];
-    snapshot = {
-      patientId: p.id, name: p.fullName,
-      period: s.structured.period,
-      medication: s.structured.medication, exercise: s.structured.exercise,
-      checkins: s.structured.checkIns, falls: s.structured.falls,
-      records: { sessions: s.structured.exercise.completed, walking: s.structured.symptoms.walkingDifficulty, tremor: s.structured.symptoms.tremor },
-      paragraphs: s.paragraphs, engine: s.engine, cached: s.cached, disclaimer: s.disclaimer,
-    };
+    try {
+      const s = await generateSnapshot(prisma, { patientId: snapPatient.patientId, doctorId: req.user.id, days: 7 });
+      const p = byId[snapPatient.patientId];
+      snapshot = {
+        patientId: p.id, name: p.fullName,
+        period: s.structured.period,
+        medication: s.structured.medication, exercise: s.structured.exercise,
+        checkins: s.structured.checkIns, falls: s.structured.falls,
+        records: { sessions: s.structured.exercise.completed, walking: s.structured.symptoms.walkingDifficulty, tremor: s.structured.symptoms.tremor },
+        paragraphs: s.paragraphs, engine: s.engine, cached: s.cached, disclaimer: s.disclaimer,
+      };
+    } catch (e) {
+      const { logger } = require('../utils/logger');
+      logger.error('dashboard snapshot skipped', { error: e.message });
+      snapshotError = 'Snapshot temporarily unavailable';
+    }
   }
 
   return ok(res, {
@@ -400,6 +412,7 @@ const doctorDashboardV2 = asyncHandler(async (req, res) => {
     attentionPatients,
     patients: patientsOut,
     snapshot,
+    snapshotError,
     recentActivity: feed,
   });
 });
