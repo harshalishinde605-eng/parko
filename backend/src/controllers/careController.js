@@ -203,9 +203,11 @@ const logExercise = asyncHandler(async (req, res) => {
   if (assignment.patientId !== req.body.patientId) return fail(res, 'Assignment does not belong to this patient', 400);
   // AI fields only when the deployed Prisma Client knows them (stale build caches may lag behind migrations).
   const aiSupported = (() => { try { return !!(prisma.exerciseLog.fields && prisma.exerciseLog.fields.aiAssisted); } catch { return false; } })();
-  const { aiAssisted, detectedReps, durationSec, avgConfidence, romSummary, formNotes, ...rest } = req.body;
+  const fbSupported = (() => { try { return !!(prisma.exerciseLog.fields && prisma.exerciseLog.fields.feedbackReason); } catch { return false; } })();
+  const { aiAssisted, detectedReps, durationSec, avgConfidence, romSummary, formNotes, feedbackReason, ...rest } = req.body;
   const aiData = aiSupported && aiAssisted ? { aiAssisted: true, detectedReps, durationSec, avgConfidence, romSummary, formNotes } : {};
-  const log = await prisma.exerciseLog.create({ data: { ...rest, ...aiData, loggedById: req.user.id } });
+  const fbData = fbSupported && feedbackReason ? { feedbackReason } : {};
+  const log = await prisma.exerciseLog.create({ data: { ...rest, ...aiData, ...fbData, loggedById: req.user.id } });
   await audit(req.user.id, 'log_exercise', 'exercise_logs', log.id, req.ip);
   // Rehab rule: repeated difficult sessions → one warning alert (deduped weekly).
   if ((req.body.difficulty || 0) >= 4) {
@@ -568,10 +570,24 @@ const doctorDashboardV2 = asyncHandler(async (req, res) => {
     prisma.medicineAssignment.findMany({ where: { patientId: { in: pids }, isActive: true }, select: { patientId: true } }),
   ]);
   // Separate: newer model may be unknown to a stale generated client.
+  // Raw SQL keeps working regardless (latest assessment per patient).
   let asmts = [];
   try {
     asmts = await prisma.physioAssessment.findMany({ where: { patientId: { in: pids } }, orderBy: { assessmentDate: 'desc' } });
   } catch { asmts = []; }
+  if (!asmts.length && pids.length) {
+    try {
+      const rows = await prisma.$queryRawUnsafe(
+        'SELECT DISTINCT ON (patient_id) * FROM physio_assessments WHERE patient_id = ANY($1) ORDER BY patient_id, assessment_date DESC',
+        pids
+      );
+      const map = (r) => ({
+        patientId: r.patient_id, assessmentDate: r.assessment_date,
+        reviewDate: r.review_date,
+      });
+      asmts = rows.map(map);
+    } catch { asmts = []; }
+  }
   const latestAsmt = {};
   for (const a of asmts) {
     if (!latestAsmt[a.patientId]) latestAsmt[a.patientId] = a;
