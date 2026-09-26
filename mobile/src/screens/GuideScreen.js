@@ -39,7 +39,7 @@ function phasesFor(resolution) {
 }
 function cap(s) { return s ? s[0].toUpperCase() + s.slice(1) : s; }
 
-export default function CoachScreen({ route, navigation }) {
+export default function GuideScreen({ route, navigation }) {
   const { assignmentId, patientId, exerciseId, exerciseName, category, patientName, targetReps = 10, instructions } = route.params || {};
   const [demo, setDemo] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -168,11 +168,10 @@ export default function CoachScreen({ route, navigation }) {
                 {paused && <Text style={[T.muted, { textAlign: 'center', marginTop: 6 }]}>Paused — resume restarts the current step.</Text>}
               </>
             )}
-            {done && <Banner kind="ok">Guided session complete — {targetReps} reps done. Now log it or start an AI-monitored session.</Banner>}
+            {done && <Banner kind="ok">Guided session complete — {targetReps} reps done. Now record it with Manual log.</Banner>}
           </Card>
 
-          <Btn title="Start AI Exercise" onPress={() => navigation.navigate('AISession', { assignmentId, patientId, exerciseName, category, targetReps, instructions })} />
-          <Btn title="Manual log instead" kind="ghost" onPress={() => navigation.navigate('Log')} />
+          <Btn title="Log this exercise" onPress={() => navigation.navigate('Log')} />
           <Card>
             <Text style={T.tiny}>Guides demonstrate movement only and are not medical advice. Your doctor remains responsible for this exercise prescription.</Text>
           </Card>

@@ -15,9 +15,7 @@ import CaregiverHomeScreen from './src/screens/CaregiverHomeScreen';
 import CaregiverLogScreen from './src/screens/CaregiverLogScreen';
 import AlertsScreen from './src/screens/AlertsScreen';
 import ProfileScreen from './src/screens/ProfileScreen';
-import AISessionScreen from './src/screens/AISessionScreen';
-import AISessionResultScreen from './src/screens/AISessionResultScreen';
-import CoachScreen from './src/screens/CoachScreen';
+import GuideScreen from './src/screens/GuideScreen';
 
 const Stack = createNativeStackNavigator();
 const Tab = createBottomTabNavigator();
@@ -89,9 +87,7 @@ function Root() {
       ) : (
         <>
           <Stack.Screen name="Main" component={CaregiverTabs} options={{ headerShown: false }} />
-          <Stack.Screen name="AISession" component={AISessionScreen} options={{ title: 'AI Exercise' }} />
-          <Stack.Screen name="AIResult" component={AISessionResultScreen} options={{ title: 'Session result' }} />
-          <Stack.Screen name="Coach" component={CoachScreen} options={{ title: 'Exercise Coach' }} />
+          <Stack.Screen name="Guide" component={GuideScreen} options={{ title: 'Exercise Guide' }} />
         </>
       )}
     </Stack.Navigator>
