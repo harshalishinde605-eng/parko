@@ -508,14 +508,26 @@ const doctorDashboardV2 = asyncHandler(async (req, res) => {
   const byId = Object.fromEntries(patients.map((p) => [p.id, p]));
 
   // Batched (no N+1): last activity, active plans, recent activity feed.
-  const [exL, medL, symL, obsL, exA, medA] = await Promise.all([
+  const [exL, medL, symL, obsL, exA, medA, asmts] = await Promise.all([
     prisma.exerciseLog.findMany({ where: { patientId: { in: pids } }, orderBy: { loggedAt: 'desc' }, take: 60, include: { assignment: { include: { exercise: true } } } }),
     prisma.medicineLog.findMany({ where: { patientId: { in: pids } }, orderBy: { takenAt: 'desc' }, take: 60, include: { assignment: { include: { medicine: true } } } }),
     prisma.symptomLog.findMany({ where: { patientId: { in: pids } }, orderBy: { loggedAt: 'desc' }, take: 60 }),
     prisma.caregiverObservation.findMany({ where: { patientId: { in: pids } }, orderBy: { loggedAt: 'desc' }, take: 60 }),
     prisma.exerciseAssignment.findMany({ where: { patientId: { in: pids }, isActive: true }, select: { patientId: true } }),
     prisma.medicineAssignment.findMany({ where: { patientId: { in: pids }, isActive: true }, select: { patientId: true } }),
+    prisma.physioAssessment.findMany({ where: { patientId: { in: pids } }, orderBy: { assessmentDate: 'desc' } }),
   ]);
+  const latestAsmt = {};
+  for (const a of asmts) {
+    if (!latestAsmt[a.patientId]) latestAsmt[a.patientId] = a;
+  }
+  const dueSoon = Date.now() + 7 * 864e5;
+  const isDue = (pid) => {
+    const a = latestAsmt[pid];
+    if (!a) return true;
+    if (a.reviewDate && new Date(a.reviewDate).getTime() <= dueSoon) return true;
+    return false;
+  };
   const lastActive = {};
   const touch = (pid, d) => {
     const t = new Date(d).getTime();
@@ -532,6 +544,10 @@ const doctorDashboardV2 = asyncHandler(async (req, res) => {
   for (const p of patients) {
     try {
       const ins = await buildInsights(prisma, p.id, 7);
+      const hardCount = exL.filter((l) => l.patientId === p.id && (l.difficulty || 0) >= 4).length;
+      const extraAttention = [];
+      if (isDue(p.id)) extraAttention.push({ level: 'amber', title: latestAsmt[p.id] ? 'Reassessment due' : 'No assessment recorded yet', detail: latestAsmt[p.id] ? 'Review date reached — reassess to update the plan.' : 'Record an initial assessment to start tracking.' });
+      if (hardCount >= 3) extraAttention.push({ level: 'amber', title: 'Repeated exercise difficulty', detail: `${hardCount} recent sessions rated difficult or worse.` });
       const row = {
         patientId: p.id,
         name: p.fullName,
@@ -543,7 +559,9 @@ const doctorDashboardV2 = asyncHandler(async (req, res) => {
         tremorRecords: (ins.dayBars?.tremor || []).reduce((a, b) => a + b.count, 0),
         falls: ins.stats.falls,
         lastActive: lastActive[p.id] ? new Date(lastActive[p.id]).toISOString() : null,
-        attention: ins.attention.slice(0, 3),
+        lastAssessment: latestAsmt[p.id] ? latestAsmt[p.id].assessmentDate : null,
+        assessmentDue: isDue(p.id),
+        attention: [...extraAttention, ...ins.attention.slice(0, 3)].slice(0, 4),
       };
       patientsOut.push(row);
       if (ins.attention.some((a) => a.level === 'red' || a.level === 'amber')) attentionPatients.push(row);
@@ -584,7 +602,7 @@ const doctorDashboardV2 = asyncHandler(async (req, res) => {
 
   return ok(res, {
     doctor: { id: req.user.id, name: req.user.fullName },
-    overview: { totalPatients: patients.length, patientsNeedingAttention: attentionPatients.length, activePlans: activePlanSet.size },
+    overview: { totalPatients: patients.length, patientsNeedingAttention: attentionPatients.length, activePlans: activePlanSet.size, assessmentsDue: patients.filter((p) => isDue(p.id)).length },
     attentionPatients,
     patients: patientsOut,
     snapshot,
