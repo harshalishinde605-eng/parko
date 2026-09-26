@@ -203,8 +203,10 @@ const medicineHistory = asyncHandler(async (req, res) => {
 const logSymptom = asyncHandler(async (req, res) => {
   const patient = await prisma.patient.findFirst({ where: { id: req.body.patientId, deletedAt: null } });
   if (!patient) return fail(res, 'Patient not found', 404);
-  const occurredAt = req.body.occurredAt && !Number.isNaN(new Date(req.body.occurredAt).getTime()) ? new Date(req.body.occurredAt) : undefined;
-  const log = await prisma.symptomLog.create({ data: { ...req.body, occurredAt, loggedById: req.user.id } });
+  const occurredAt = req.body.occurredAt && !Number.isNaN(new Date(req.body.occurredAt).getTime()) ? new Date(req.body.occurredAt) : null;
+  const { occurredAt: _drop1, ...symptomData } = req.body;
+  const log = await prisma.symptomLog.create({ data: { ...symptomData, loggedById: req.user.id } });
+  if (occurredAt) await prisma.$executeRawUnsafe('UPDATE symptom_logs SET occurred_at = $1 WHERE id = $2', occurredAt, log.id);
   await evaluateAndCreateAlerts(prisma, { patientId: req.body.patientId, kind: 'symptom', payload: req.body });
   await audit(req.user.id, 'log_symptom', 'symptom_logs', log.id, req.ip);
   return ok(res, log, 201);
@@ -216,8 +218,10 @@ const patientSymptoms = asyncHandler(async (req, res) => {
 const addObservation = asyncHandler(async (req, res) => {
   const patient = await prisma.patient.findFirst({ where: { id: req.body.patientId, deletedAt: null } });
   if (!patient) return fail(res, 'Patient not found', 404);
-  const occurredAt = req.body.occurredAt && !Number.isNaN(new Date(req.body.occurredAt).getTime()) ? new Date(req.body.occurredAt) : undefined;
-  const o = await prisma.caregiverObservation.create({ data: { ...req.body, occurredAt, loggedById: req.user.id } });
+  const occurredAt = req.body.occurredAt && !Number.isNaN(new Date(req.body.occurredAt).getTime()) ? new Date(req.body.occurredAt) : null;
+  const { occurredAt: _drop2, ...obsData } = req.body;
+  const o = await prisma.caregiverObservation.create({ data: { ...obsData, loggedById: req.user.id } });
+  if (occurredAt) await prisma.$executeRawUnsafe('UPDATE caregiver_observations SET occurred_at = $1 WHERE id = $2', occurredAt, o.id);
   await evaluateAndCreateAlerts(prisma, { patientId: req.body.patientId, kind: 'observation', payload: req.body });
   await audit(req.user.id, 'add_observation', 'caregiver_observations', o.id, req.ip);
   return ok(res, o, 201);
@@ -234,7 +238,9 @@ const resolveAlert = asyncHandler(async (req, res) => {
   const existing = await prisma.alert.findUnique({ where: { id: req.params.id } });
   if (!existing) return fail(res, 'Alert not found', 404);
   await audit(req.user.id, 'resolve_alert', 'alerts', existing.id, req.ip);
-  return ok(res, await prisma.alert.update({ where: { id: req.params.id }, data: { isRead: true, resolvedAt: new Date() } }));
+  await prisma.alert.update({ where: { id: req.params.id }, data: { isRead: true } });
+  await prisma.$executeRawUnsafe('UPDATE alerts SET resolved_at = NOW() WHERE id = $1', req.params.id);
+  return ok(res, await prisma.alert.findUnique({ where: { id: req.params.id } }));
 });
 const readAlert = asyncHandler(async (req, res) => {
   const existing = await prisma.alert.findUnique({ where: { id: req.params.id } });
