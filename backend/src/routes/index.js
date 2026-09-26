@@ -1,6 +1,6 @@
 const express = require('express');
 const { authenticate, authorize, patientAccess } = require('../middleware/auth');
-const { validate, registerSchema, loginSchema, patientSchema, exerciseSchema, exerciseAssignSchema, exerciseLogSchema, medicineSchema, medicineAssignSchema, medicineLogSchema, symptomLogSchema, observationSchema } = require('../validators/schemas');
+const { validate, registerSchema, loginSchema, patientSchema, exerciseSchema, exerciseAssignSchema, exerciseLogSchema, medicineSchema, medicineAssignSchema, medicineLogSchema, symptomLogSchema, observationSchema, assessmentSchema, goalSchema, goalUpdateSchema } = require('../validators/schemas');
 const A = require('../controllers/authController');
 const C = require('../controllers/careController');
 
@@ -59,6 +59,15 @@ router.get('/patients/:id/changes', authenticate, patientAccess, C.patientChange
 router.get('/patients/:id/summary', authenticate, patientAccess, C.patientSummary);
 router.get('/patients/:id/care-team', authenticate, patientAccess, C.patientCareTeam);
 router.get('/patients/:id/analytics', authenticate, patientAccess, C.patientAnalytics);
+
+// Physiotherapy assessments + goals + progress
+router.post('/patients/:id/assessments', authenticate, authorize('DOCTOR', 'ADMIN'), patientAccess, validate(assessmentSchema), C.createAssessment);
+router.get('/patients/:id/assessments', authenticate, patientAccess, C.listAssessments);
+router.get('/patients/:id/assessments/compare', authenticate, patientAccess, C.compareAssessments);
+router.post('/patients/:id/goals', authenticate, authorize('DOCTOR', 'ADMIN'), patientAccess, validate(goalSchema), C.createGoal);
+router.get('/patients/:id/goals', authenticate, patientAccess, C.listGoals);
+router.put('/goals/:id', authenticate, authorize('DOCTOR', 'ADMIN'), validate(goalUpdateSchema), C.updateGoal);
+router.get('/patients/:id/progress', authenticate, patientAccess, C.patientProgress);
 
 // Notes, alerts, reports, dashboards
 router.post('/notes', authenticate, authorize('DOCTOR', 'ADMIN'), C.addNote);

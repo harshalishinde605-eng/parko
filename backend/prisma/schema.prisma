@@ -69,6 +69,8 @@ model User {
   observations      CaregiverObservation[] @relation("ObservedBy")
   doctorNotes       DoctorNote[]
   reports           Report[]             @relation("GeneratedBy")
+  assessments       PhysioAssessment[]   @relation("TherapistAssessments")
+  goals             RehabGoal[]          @relation("TherapistGoals")
   auditLogs         AuditLog[]
   patientLinksAsCaregiver PatientCaregiver[]
   patientLinksAsDoctor    PatientDoctor[]
@@ -125,6 +127,8 @@ model Patient {
   doctorNotes  DoctorNote[]
   reports      Report[]
   aiSummaries  AiCareSummary[]
+  assessments  PhysioAssessment[]
+  goals        RehabGoal[]
 
   @@map("patients")
   @@index([fullName])
@@ -215,6 +219,7 @@ model ExerciseLog {
   repsDone     Int?      @map("reps_done")
   durationMin  Int?      @map("duration_min")
   difficulty   Int?
+  feedbackReason String? @map("feedback_reason")
   remarks      String?
   aiAssisted   Boolean @default(false) @map("ai_assisted")
   detectedReps Int?    @map("detected_reps")
@@ -332,6 +337,48 @@ model Alert {
 
   @@map("alerts")
   @@index([patientId, isRead])
+}
+
+model PhysioAssessment {
+  id             String    @id @default(cuid())
+  patientId      String    @map("patient_id")
+  patient        Patient   @relation(fields: [patientId], references: [id], onDelete: Cascade)
+  therapistId    String    @map("therapist_id")
+  therapist      User      @relation("TherapistAssessments", fields: [therapistId], references: [id])
+  assessmentDate DateTime  @default(now()) @map("assessment_date")
+  assessmentType String    @default("initial") @map("assessment_type")
+  tug            Float?
+  walkSpeed      Float?    @map("walk_speed")
+  sitToStand     Int?      @map("sit_to_stand")
+  balanceScore   Int?      @map("balance_score")
+  balanceMax     Int?      @default(28) @map("balance_max")
+  problems       String[]  @default([])
+  observations   String?
+  notes          String?
+  reviewDate     DateTime? @map("review_date")
+  createdAt      DateTime  @default(now()) @map("created_at")
+  updatedAt      DateTime  @updatedAt @map("updated_at")
+
+  @@map("physio_assessments")
+  @@index([patientId, assessmentDate])
+}
+
+model RehabGoal {
+  id          String    @id @default(cuid())
+  patientId   String    @map("patient_id")
+  patient     Patient   @relation(fields: [patientId], references: [id], onDelete: Cascade)
+  therapistId String    @map("therapist_id")
+  therapist   User      @relation("TherapistGoals", fields: [therapistId], references: [id])
+  title       String
+  description String?
+  status      String    @default("active")
+  target      String?
+  reviewDate  DateTime? @map("review_date")
+  createdAt   DateTime  @default(now()) @map("created_at")
+  updatedAt   DateTime  @updatedAt @map("updated_at")
+
+  @@map("rehab_goals")
+  @@index([patientId, status])
 }
 
 model DoctorNote {

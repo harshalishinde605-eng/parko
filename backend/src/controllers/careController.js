@@ -377,6 +377,129 @@ const patientAnalytics = asyncHandler(async (req, res) => {
   return ok(res, await buildAnalytics(prisma, req.params.id, { period, startDate, endDate }));
 });
 
+// ---- Physiotherapy assessments ----
+const createAssessment = asyncHandler(async (req, res) => {
+  const patientId = req.params.id;
+  const patient = await prisma.patient.findFirst({ where: { id: patientId, deletedAt: null } });
+  if (!patient) return fail(res, 'Patient not found', 404);
+  const { assessmentType, assessmentDate, tug, walkSpeed, sitToStand, balanceScore, balanceMax, problems, observations, notes, reviewDate } = req.body;
+  const a = await prisma.physioAssessment.create({
+    data: {
+      patientId, therapistId: req.user.id, assessmentType,
+      assessmentDate: assessmentDate ? new Date(assessmentDate) : undefined,
+      tug, walkSpeed, sitToStand, balanceScore, balanceMax,
+      problems: problems || [],
+      observations, notes,
+      reviewDate: reviewDate ? new Date(reviewDate) : undefined,
+    },
+  });
+  await audit(req.user.id, 'create_assessment', 'physio_assessments', a.id, req.ip);
+  return ok(res, a, 201);
+});
+
+const listAssessments = asyncHandler(async (req, res) => ok(res,
+  await prisma.physioAssessment.findMany({ where: { patientId: req.params.id }, orderBy: { assessmentDate: 'desc' } })
+));
+
+function measureDiff(label, prev, cur, unit, lowerIsBetter) {
+  if (prev == null || cur == null) return { label, previous: prev, current: cur, difference: null, direction: 'UNKNOWN', text: 'Not recorded in both assessments.' };
+  const d = Math.round((cur - prev) * 100) / 100;
+  return {
+    label, previous: prev, current: cur, unit, difference: d,
+    direction: d === 0 ? 'NO_CHANGE' : 'RECORDED_CHANGE',
+    text: d === 0 ? `No recorded change (${cur}${unit}).` : `Recorded ${cur}${unit} vs ${prev}${unit} previously.`,
+    lowerIsBetter: !!lowerIsBetter,
+  };
+}
+
+const compareAssessments = asyncHandler(async (req, res) => {
+  const all = await prisma.physioAssessment.findMany({ where: { patientId: req.params.id }, orderBy: { assessmentDate: 'desc' }, take: 2 });
+  if (all.length < 2) return ok(res, { previous: all[1] || null, current: all[0] || null, comparison: [], note: 'Need at least two assessments to compare.' });
+  const [current, previous] = all;
+  return ok(res({
+    previous, current,
+    comparison: [
+      measureDiff('Timed Up and Go', previous.tug, current.tug, ' sec', true),
+      measureDiff('Gait speed', previous.walkSpeed, current.walkSpeed, ' m/s', false),
+      measureDiff('Sit-to-Stand', previous.sitToStand, current.sitToStand, ' reps', false),
+      measureDiff('Balance score', previous.balanceScore, current.balanceScore, `/${current.balanceMax || previous.balanceMax || 28}`, false),
+    ],
+  }));
+});
+
+// ---- Rehabilitation goals ----
+const createGoal = asyncHandler(async (req, res) => {
+  const patientId = req.params.id;
+  const patient = await prisma.patient.findFirst({ where: { id: patientId, deletedAt: null } });
+  if (!patient) return fail(res, 'Patient not found', 404);
+  const { title, description, status, target, reviewDate } = req.body;
+  const g = await prisma.rehabGoal.create({
+    data: { patientId, therapistId: req.user.id, title, description, status, target, reviewDate: reviewDate ? new Date(reviewDate) : undefined },
+  });
+  await audit(req.user.id, 'create_goal', 'rehab_goals', g.id, req.ip);
+  return ok(res, g, 201);
+});
+
+const listGoals = asyncHandler(async (req, res) => ok(res,
+  await prisma.rehabGoal.findMany({ where: { patientId: req.params.id }, orderBy: { createdAt: 'desc' } })
+));
+
+const updateGoal = asyncHandler(async (req, res) => {
+  const existing = await prisma.rehabGoal.findUnique({ where: { id: req.params.id } });
+  if (!existing) return fail(res, 'Goal not found', 404);
+  if (req.user.role !== 'ADMIN') {
+    const allowed = await scopedPatientIds(req.user);
+    if (allowed && !allowed.includes(existing.patientId)) return fail(res, 'Not authorized for this patient', 403);
+  }
+  const { title, description, status, target, reviewDate } = req.body;
+  const g = await prisma.rehabGoal.update({
+    where: { id: req.params.id },
+    data: {
+      ...(title !== undefined ? { title } : {}),
+      ...(description !== undefined ? { description } : {}),
+      ...(status !== undefined ? { status } : {}),
+      ...(target !== undefined ? { target } : {}),
+      ...(reviewDate !== undefined ? { reviewDate: reviewDate ? new Date(reviewDate) : null } : {}),
+    },
+  });
+  await audit(req.user.id, 'update_goal', 'rehab_goals', g.id, req.ip);
+  return ok(res, g);
+});
+
+// ---- Rehab progress (adherence weeks + latest assessment pair + feedback) ----
+const patientProgress = asyncHandler(async (req, res) => {
+  const { exerciseCompletion } = require('../utils/calculations');
+  const patientId = req.params.id;
+  const now = new Date();
+  const weeks = [];
+  for (let w = 0; w < 4; w++) {
+    const to = new Date(now.getTime() - w * 7 * 864e5);
+    const from = new Date(to.getTime() - 7 * 864e5);
+    const logs = await prisma.exerciseLog.findMany({ where: { patientId, loggedAt: { gte: from, lte: to } } });
+    const stats = exerciseCompletion(logs);
+    weeks.unshift({ week: `Week ${4 - w}`, completionPct: stats.completionPct, sessions: stats.completed + stats.partial });
+  }
+  const assessments = await prisma.physioAssessment.findMany({ where: { patientId }, orderBy: { assessmentDate: 'desc' }, take: 2 });
+  const feedback = await prisma.exerciseLog.findMany({
+    where: { patientId, OR: [{ difficulty: { not: null } }, { feedbackReason: { not: null } }] },
+    orderBy: { loggedAt: 'desc' }, take: 20,
+    include: { assignment: { include: { exercise: true } } },
+  });
+  const observations = await prisma.caregiverObservation.findMany({ where: { patientId }, orderBy: { loggedAt: 'desc' }, take: 10 });
+  const goals = await prisma.rehabGoal.findMany({ where: { patientId, status: 'active' }, orderBy: { createdAt: 'desc' } });
+  return ok(res, {
+    adherenceWeeks: weeks,
+    latestAssessment: assessments[0] || null,
+    previousAssessment: assessments[1] || null,
+    activeGoals: goals,
+    feedback: feedback.map((l) => ({
+      at: l.loggedAt, exercise: l.assignment?.exercise?.name, status: l.status,
+      difficulty: l.difficulty, feedbackReason: l.feedbackReason, remarks: l.remarks,
+    })),
+    observations: observations.map((o) => ({ at: o.loggedAt, text: o.notes || `${o.mood || ''} ${o.appetite || ''}`.trim() })),
+  });
+});
+
 const doctorDashboardV2 = asyncHandler(async (req, res) => {
   const { generateSnapshot } = require('../services/snapshotService');
   const ids = await scopedPatientIds(req.user);
@@ -470,4 +593,4 @@ const doctorDashboardV2 = asyncHandler(async (req, res) => {
   });
 });
 
-module.exports = { createPatient, listPatients, getPatient, updatePatient, assignCaregiver, removeCaregiver, createCaregiver, getCaregiver, createExercise, listExercises, updateExercise, exerciseDemo, assignExercise, patientExercises, logExercise, exerciseHistory, createMedicine, listMedicines, assignMedicine, patientMedicines, logMedicine, medicineHistory, logSymptom, patientSymptoms, addObservation, patientObservations, listAlerts, readAlert, resolveAlert, addNote, createReport, listReports, reportPDF, caregiverDashboard, doctorDashboard, doctorDashboardV2, patientTimeline, patientInsights, patientChanges, patientSummary, patientCareTeam, patientAnalytics };
+module.exports = { createPatient, listPatients, getPatient, updatePatient, assignCaregiver, removeCaregiver, createCaregiver, getCaregiver, createExercise, listExercises, updateExercise, exerciseDemo, assignExercise, patientExercises, logExercise, exerciseHistory, createMedicine, listMedicines, assignMedicine, patientMedicines, logMedicine, medicineHistory, logSymptom, patientSymptoms, addObservation, patientObservations, listAlerts, readAlert, resolveAlert, addNote, createReport, listReports, reportPDF, caregiverDashboard, doctorDashboard, doctorDashboardV2, patientTimeline, patientInsights, patientChanges, patientSummary, patientCareTeam, patientAnalytics, createAssessment, listAssessments, compareAssessments, createGoal, listGoals, updateGoal, patientProgress };
