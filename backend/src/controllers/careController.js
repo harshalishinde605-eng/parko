@@ -431,23 +431,23 @@ const createAssessment = asyncHandler(async (req, res) => {
   const patient = await prisma.patient.findFirst({ where: { id: patientId, deletedAt: null } });
   if (!patient) return fail(res, 'Patient not found', 404);
   const { assessmentType, assessmentDate, tug, walkSpeed, sitToStand, balanceScore, balanceMax, problems, observations, notes, reviewDate } = req.body;
-  const a = await prisma.physioAssessment.create({
-    data: {
-      patientId, therapistId: req.user.id, assessmentType,
-      assessmentDate: assessmentDate ? new Date(assessmentDate) : undefined,
-      tug, walkSpeed, sitToStand, balanceScore, balanceMax,
-      problems: problems || [],
-      observations, notes,
-      reviewDate: reviewDate ? new Date(reviewDate) : undefined,
-    },
+  const { createAssessmentSafe } = require('../utils/modelSafe');
+  const a = await createAssessmentSafe(prisma, {
+    patientId, therapistId: req.user.id, assessmentType,
+    assessmentDate: assessmentDate ? new Date(assessmentDate) : undefined,
+    tug, walkSpeed, sitToStand, balanceScore, balanceMax,
+    problems: problems || [],
+    observations, notes,
+    reviewDate: reviewDate ? new Date(reviewDate) : undefined,
   });
   await audit(req.user.id, 'create_assessment', 'physio_assessments', a.id, req.ip);
   return ok(res, a, 201);
 });
 
-const listAssessments = asyncHandler(async (req, res) => ok(res,
-  await prisma.physioAssessment.findMany({ where: { patientId: req.params.id }, orderBy: { assessmentDate: 'desc' } })
-));
+const listAssessments = asyncHandler(async (req, res) => {
+  const { listAssessmentsSafe } = require('../utils/modelSafe');
+  return ok(res, await listAssessmentsSafe(prisma, req.params.id));
+});
 
 function measureDiff(label, prev, cur, unit, lowerIsBetter) {
   if (prev == null || cur == null) return { label, previous: prev, current: cur, difference: null, direction: 'UNKNOWN', text: 'Not recorded in both assessments.' };
@@ -461,7 +461,8 @@ function measureDiff(label, prev, cur, unit, lowerIsBetter) {
 }
 
 const compareAssessments = asyncHandler(async (req, res) => {
-  const all = await prisma.physioAssessment.findMany({ where: { patientId: req.params.id }, orderBy: { assessmentDate: 'desc' }, take: 2 });
+  const { listAssessmentsSafe } = require('../utils/modelSafe');
+  const all = (await listAssessmentsSafe(prisma, req.params.id)).slice(0, 2);
   if (all.length < 2) return ok(res, { previous: all[1] || null, current: all[0] || null, comparison: [], note: 'Need at least two assessments to compare.' });
   const [current, previous] = all;
   return ok(res({
@@ -481,34 +482,32 @@ const createGoal = asyncHandler(async (req, res) => {
   const patient = await prisma.patient.findFirst({ where: { id: patientId, deletedAt: null } });
   if (!patient) return fail(res, 'Patient not found', 404);
   const { title, description, status, target, reviewDate } = req.body;
-  const g = await prisma.rehabGoal.create({
-    data: { patientId, therapistId: req.user.id, title, description, status, target, reviewDate: reviewDate ? new Date(reviewDate) : undefined },
-  });
+  const { createGoalSafe } = require('../utils/modelSafe');
+  const g = await createGoalSafe(prisma, { patientId, therapistId: req.user.id, title, description, status, target, reviewDate: reviewDate ? new Date(reviewDate) : undefined });
   await audit(req.user.id, 'create_goal', 'rehab_goals', g.id, req.ip);
   return ok(res, g, 201);
 });
 
-const listGoals = asyncHandler(async (req, res) => ok(res,
-  await prisma.rehabGoal.findMany({ where: { patientId: req.params.id }, orderBy: { createdAt: 'desc' } })
-));
+const listGoals = asyncHandler(async (req, res) => {
+  const { listGoalsSafe } = require('../utils/modelSafe');
+  return ok(res, await listGoalsSafe(prisma, req.params.id));
+});
 
 const updateGoal = asyncHandler(async (req, res) => {
-  const existing = await prisma.rehabGoal.findUnique({ where: { id: req.params.id } });
+  const { findGoalSafe, updateGoalSafe } = require('../utils/modelSafe');
+  const existing = await findGoalSafe(prisma, req.params.id);
   if (!existing) return fail(res, 'Goal not found', 404);
   if (req.user.role !== 'ADMIN') {
     const allowed = await scopedPatientIds(req.user);
     if (allowed && !allowed.includes(existing.patientId)) return fail(res, 'Not authorized for this patient', 403);
   }
   const { title, description, status, target, reviewDate } = req.body;
-  const g = await prisma.rehabGoal.update({
-    where: { id: req.params.id },
-    data: {
-      ...(title !== undefined ? { title } : {}),
-      ...(description !== undefined ? { description } : {}),
-      ...(status !== undefined ? { status } : {}),
-      ...(target !== undefined ? { target } : {}),
-      ...(reviewDate !== undefined ? { reviewDate: reviewDate ? new Date(reviewDate) : null } : {}),
-    },
+  const g = await updateGoalSafe(prisma, req.params.id, {
+    ...(title !== undefined ? { title } : {}),
+    ...(description !== undefined ? { description } : {}),
+    ...(status !== undefined ? { status } : {}),
+    ...(target !== undefined ? { target } : {}),
+    ...(reviewDate !== undefined ? { reviewDate: reviewDate ? new Date(reviewDate) : null } : {}),
   });
   await audit(req.user.id, 'update_goal', 'rehab_goals', g.id, req.ip);
   return ok(res, g);
@@ -527,14 +526,18 @@ const patientProgress = asyncHandler(async (req, res) => {
     const stats = exerciseCompletion(logs);
     weeks.unshift({ week: `Week ${4 - w}`, completionPct: stats.completionPct, sessions: stats.completed + stats.partial });
   }
-  const assessments = await prisma.physioAssessment.findMany({ where: { patientId }, orderBy: { assessmentDate: 'desc' }, take: 2 });
+  const { listAssessmentsSafe, listGoalsSafe } = require('../utils/modelSafe');
+  const assessments = (await listAssessmentsSafe(prisma, patientId)).slice(0, 2);
+  const logFields = (() => { try { return prisma.exerciseLog.fields || null; } catch { return null; } })();
   const feedback = await prisma.exerciseLog.findMany({
-    where: { patientId, OR: [{ difficulty: { not: null } }, { feedbackReason: { not: null } }] },
+    where: logFields && logFields.feedbackReason
+      ? { patientId, OR: [{ difficulty: { not: null } }, { feedbackReason: { not: null } }] }
+      : { patientId, difficulty: { not: null } },
     orderBy: { loggedAt: 'desc' }, take: 20,
     include: { assignment: { include: { exercise: true } } },
   });
   const observations = await prisma.caregiverObservation.findMany({ where: { patientId }, orderBy: { loggedAt: 'desc' }, take: 10 });
-  const goals = await prisma.rehabGoal.findMany({ where: { patientId, status: 'active' }, orderBy: { createdAt: 'desc' } });
+  const goals = (await listGoalsSafe(prisma, patientId)).filter((g) => g.status === 'active');
   return ok(res, {
     adherenceWeeks: weeks,
     latestAssessment: assessments[0] || null,
@@ -542,7 +545,7 @@ const patientProgress = asyncHandler(async (req, res) => {
     activeGoals: goals,
     feedback: feedback.map((l) => ({
       at: l.loggedAt, exercise: l.assignment?.exercise?.name, status: l.status,
-      difficulty: l.difficulty, feedbackReason: l.feedbackReason, remarks: l.remarks,
+      difficulty: l.difficulty, feedbackReason: l.feedbackReason ?? null, remarks: l.remarks,
     })),
     observations: observations.map((o) => ({ at: o.loggedAt, text: o.notes || `${o.mood || ''} ${o.appetite || ''}`.trim() })),
   });
@@ -556,15 +559,19 @@ const doctorDashboardV2 = asyncHandler(async (req, res) => {
   const byId = Object.fromEntries(patients.map((p) => [p.id, p]));
 
   // Batched (no N+1): last activity, active plans, recent activity feed.
-  const [exL, medL, symL, obsL, exA, medA, asmts] = await Promise.all([
+  const [exL, medL, symL, obsL, exA, medA] = await Promise.all([
     prisma.exerciseLog.findMany({ where: { patientId: { in: pids } }, orderBy: { loggedAt: 'desc' }, take: 60, include: { assignment: { include: { exercise: true } } } }),
     prisma.medicineLog.findMany({ where: { patientId: { in: pids } }, orderBy: { takenAt: 'desc' }, take: 60, include: { assignment: { include: { medicine: true } } } }),
     prisma.symptomLog.findMany({ where: { patientId: { in: pids } }, orderBy: { loggedAt: 'desc' }, take: 60 }),
     prisma.caregiverObservation.findMany({ where: { patientId: { in: pids } }, orderBy: { loggedAt: 'desc' }, take: 60 }),
     prisma.exerciseAssignment.findMany({ where: { patientId: { in: pids }, isActive: true }, select: { patientId: true } }),
     prisma.medicineAssignment.findMany({ where: { patientId: { in: pids }, isActive: true }, select: { patientId: true } }),
-    prisma.physioAssessment.findMany({ where: { patientId: { in: pids } }, orderBy: { assessmentDate: 'desc' } }),
   ]);
+  // Separate: newer model may be unknown to a stale generated client.
+  let asmts = [];
+  try {
+    asmts = await prisma.physioAssessment.findMany({ where: { patientId: { in: pids } }, orderBy: { assessmentDate: 'desc' } });
+  } catch { asmts = []; }
   const latestAsmt = {};
   for (const a of asmts) {
     if (!latestAsmt[a.patientId]) latestAsmt[a.patientId] = a;
