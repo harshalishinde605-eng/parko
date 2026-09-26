@@ -117,13 +117,13 @@ function summaryFor(w, days) {
   paras.push(`Medication records were completed on ${meds.taken} of ${meds.total} recorded doses${meds.total ? ` (${meds.adherencePct}%)` : ''} in the last ${days} days.`);
   paras.push(`${ex.completed + ex.partial} exercise session${ex.completed + ex.partial === 1 ? ' was' : 's were'} recorded${ex.total ? ` (${ex.completionPct}% completion)` : ''}.`);
   const walk = byType.walking || byType.balance ? [...(byType.walking || []), ...(byType.balance || [])] : [];
-  if (walk.length) paras.push(`Walking difficulty was recorded on ${walk.length} occasion${walk.length === 1 ? '' : 's'}, with entries ranging from ${Math.min(...walk)}–${Math.max(...walk)}/10.`);
+  if (walk.length) paras.push(`Walking difficulty was recorded on ${walk.length} occasion${walk.length === 1 ? '' : 's'}, with entries ranging from ${Math.min(...walk)}-${Math.max(...walk)}/10.`);
   if ((byType.tremor || []).length) paras.push(`${byType.tremor.length} tremor observation${byType.tremor.length === 1 ? ' was' : 's were'} recorded.`);
   const falls = w.observations.filter((o) => o.falls).length;
   paras.push(falls ? `${falls} fall${falls === 1 ? ' was' : 's were'} recorded during this period.` : 'No falls were recorded during this period.');
   if (w.observations.length) {
     const last = w.observations[w.observations.length - 1];
-    if (last.notes) paras.push(`Latest caregiver note: “${last.notes}”`);
+    if (last.notes) paras.push(`Latest caregiver note: "${last.notes}"`);
   }
   paras.push(`Records exist for ${daysLogged} of the last ${days} days.`);
   return { paragraphs: paras, stats: { ex, meds, daysLogged, falls } };
