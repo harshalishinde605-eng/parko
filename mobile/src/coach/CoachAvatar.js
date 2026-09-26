@@ -75,13 +75,35 @@ function pickRiggedMesh(scene, gender) {
   scene.traverse((o) => {
     if (o && o.isSkinnedMesh) rigged.push(o);
   });
-  const isFemaleMesh = (o) => {
-    if (/woman|female|girl|lady/i.test(o.name || '')) return true;
-    if (/man\s*\(rig\)/i.test(o.name || '')) return false;
-    return ancestors(pmap, o).some((a) => /woman|female|girl|lady/i.test(a.name || ''));
+  const line = (o) => {
+    const names = [o.name];
+    let cur = pmap.get(o);
+    let guard = 0;
+    while (cur && guard++ < 12) { names.push(cur.name); cur = pmap.get(cur); }
+    return names.join(' ');
   };
-  const match = rigged.filter((o) => isFemaleMesh(o) === wantFemale);
-  return { selected: match[0] || rigged[0] || null, rigged, pmap };
+  const match = rigged.filter((o) => {
+    const s = line(o);
+    if (/woman|female|girl|lady/i.test(s)) return wantFemale;
+    if (/man\s*\(rig\)/i.test(s)) return !wantFemale;
+    return !wantFemale;
+  });
+  return { selected: match[0] || rigged[0] || null, rigged };
+}
+
+function matchBonesIn(list) {
+  const found = {};
+  const seen = {};
+  for (const o of list || []) {
+    if (!o || !o.name) continue;
+    for (const [key, re] of Object.entries(BONE_PATTERNS)) {
+      if (!seen[key] && re.test(o.name)) {
+        seen[key] = true;
+        found[key] = o;
+      }
+    }
+  }
+  return found;
 }
 
 function RiggedFigure({ scene, gender, theme, playing, tempo, replayKey, onBones }) {
@@ -90,8 +112,6 @@ function RiggedFigure({ scene, gender, theme, playing, tempo, replayKey, onBones
 
   const prepared = useMemo(() => {
     const found = pickRiggedMesh(scene, gender);
-    const pmap = parentMap(scene);
-    const root = found.selected ? modelGroup(pmap, scene, found.selected) : scene;
     const selected = found.selected;
     const rigged = found.rigged;
     // Show ONLY the selected rigged mesh; hide every other mesh node
@@ -104,7 +124,11 @@ function RiggedFigure({ scene, gender, theme, playing, tempo, replayKey, onBones
         if (show) shown.push(o.name || 'mesh');
       }
     });
-    const bones = matchBones(root);
+    // Animate the SELECTED mesh's own skeleton: rig joints live outside the
+    // mesh's ancestor chain, so subtree search misses them (silent no-motion).
+    const skelBones = (selected && selected.skeleton && selected.skeleton.bones) || [];
+    const scoped = skelBones.length ? matchBonesIn(skelBones) : {};
+    const bones = Object.keys(scoped).length ? scoped : matchBones(scene);
     // Capture rest pose ONCE per bone (never re-capture a posed skeleton).
     Object.values(bones).forEach((bn) => {
       if (!restRef.current[bn.name]) restRef.current[bn.name] = bn.quaternion.clone();

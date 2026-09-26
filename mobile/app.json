@@ -2,7 +2,7 @@
   "expo": {
     "name": "PARKO Care",
     "slug": "parko-care",
-    "version": "2.0.0",
+    "version": "2.1.0",
     "orientation": "portrait",
     "scheme": "parko-care",
     "icon": "./assets/icon.png",
@@ -11,7 +11,7 @@
     },
     "android": {
       "package": "com.parko.care",
-      "versionCode": 2,
+      "versionCode": 3,
       "adaptiveIcon": {
         "foregroundImage": "./assets/icon.png",
         "backgroundColor": "#0B6E4F"
