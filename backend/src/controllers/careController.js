@@ -145,9 +145,13 @@ const logExercise = asyncHandler(async (req, res) => {
   const assignment = await prisma.exerciseAssignment.findUnique({ where: { id: req.body.assignmentId } });
   if (!assignment) return fail(res, 'Exercise assignment not found', 404);
   if (assignment.patientId !== req.body.patientId) return fail(res, 'Assignment does not belong to this patient', 400);
-  const log = await prisma.exerciseLog.create({ data: { ...req.body, loggedById: req.user.id } });
+  // AI fields only when the deployed Prisma Client knows them (stale build caches may lag behind migrations).
+  const aiSupported = (() => { try { return !!(prisma.exerciseLog.fields && prisma.exerciseLog.fields.aiAssisted); } catch { return false; } })();
+  const { aiAssisted, detectedReps, durationSec, avgConfidence, romSummary, formNotes, ...rest } = req.body;
+  const aiData = aiSupported && aiAssisted ? { aiAssisted: true, detectedReps, durationSec, avgConfidence, romSummary, formNotes } : {};
+  const log = await prisma.exerciseLog.create({ data: { ...rest, ...aiData, loggedById: req.user.id } });
   await audit(req.user.id, 'log_exercise', 'exercise_logs', log.id, req.ip);
-  return ok(res, log, 201);
+  return ok(res, { ...log, aiStored: aiSupported && !!aiAssisted }, 201);
 });
 
 const exerciseHistory = asyncHandler(async (req, res) => {
