@@ -46,11 +46,13 @@ export default function AISessionScreen({ route, navigation }) {
   const [guideOk, setGuideOk] = useState(false);
   const [paused, setPaused] = useState(false);
   const [startedAt, setStartedAt] = useState(null);
+  const [camNote, setCamNote] = useState('');
   const camRef = useRef(null);
   const providerRef = useRef(null);
   const recRef = useRef(null);
   const analyzerRef = useRef(analyzer);
   const stateRef = useRef({ phase: 'init', paused: false });
+  const errStreak = useRef(0);
 
   useEffect(() => { stateRef.current.paused = paused; }, [paused]);
 
@@ -143,8 +145,13 @@ export default function AISessionScreen({ route, navigation }) {
         setReps(r.reps);
         setFeedback(r.feedback.slice(-2));
         setConf(r.confidence);
+        errStreak.current = 0;
+        setCamNote('');
         if (Date.now() - t0 > 10 * 60 * 1000) finishSession('Session reached the 10-minute limit and was stopped.');
-      } catch { /* frame skipped */ }
+      } catch {
+        errStreak.current += 1;
+        if (errStreak.current >= 5) setCamNote('Camera frames are failing — hold the phone steady, improve light, keep the body in frame.');
+      }
     }, (s) => setFps(s.fps));
   };
 
@@ -197,6 +204,7 @@ export default function AISessionScreen({ route, navigation }) {
         <Text style={{ color: '#fff', fontSize: 13, fontWeight: '700' }}>AI EXERCISE · {label}</Text>
         <Text style={{ color: '#fff', fontSize: 20, fontWeight: '800' }}>{exerciseName}</Text>
         <Text style={{ color: 'rgba(255,255,255,0.8)', fontSize: 12 }}>Target {targetReps} · Detected {reps} · {Math.round(conf)}% confidence{fps ? ` · ${fps} fps` : ''}</Text>
+        {!!camNote && <Text style={{ color: '#fbbf24', fontSize: 12, fontWeight: '700', marginTop: 2 }}>{camNote}</Text>}
       </View>
       <View style={{ flex: 1 }} onLayout={(e) => setViewSize({ w: e.nativeEvent.layout.width, h: e.nativeEvent.layout.height })}>
         <CameraView ref={camRef} style={{ flex: 1 }} facing={facing} />

@@ -1,78 +1,131 @@
 import React, { Suspense, useEffect, useMemo, useRef, useState } from 'react';
 import { View, ActivityIndicator } from 'react-native';
 import { Canvas, useFrame } from '@react-three/fiber';
-import { OrbitControls, useGLTF } from '@react-three/drei';
+import { OrbitControls } from '@react-three/drei';
 import * as THREE from 'three';
+import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
+import { SkeletonUtils } from 'three-stdlib';
 import { Asset } from 'expo-asset';
+import * as FileSystem from 'expo-file-system';
 import { matchBones, requiredForSitStand } from './modelUtil';
 import { cycleAt } from './sitStandCycle';
-import { C } from '../theme';
 
 const rad = (d) => (d * Math.PI) / 180;
 
-// Classify meshes for outfit theming: shirt = torso-band, compact meshes.
-function classifyMeshes(root, totalH) {
-  const out = [];
-  root.traverse((o) => {
-    if (!o || !o.isMesh) return;
-    try {
-      const box = new THREE.Box3().setFromObject(o);
-      const size = new THREE.Vector3();
-      box.getSize(size);
-      const center = new THREE.Vector3();
-      box.getCenter(center);
-      const h = size.y / totalH;
-      const cy = center.y / totalH;
-      out.push({ object3D: o, name: o.name, volume: size.x * size.y * size.z, h, cy });
-    } catch { /* ignore */ }
+function b64ToArrayBuffer(b64) {
+  const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/=';
+  const clean = b64.replace(/[^A-Za-z0-9+/=]/g, '');
+  const bytes = new Uint8Array((clean.length * 3) / 4);
+  let p = 0, i = 0;
+  while (i < clean.length) {
+    const e1 = chars.indexOf(clean[i++]); const e2 = chars.indexOf(clean[i++]);
+    const e3 = chars.indexOf(clean[i++]); const e4 = chars.indexOf(clean[i++]);
+    const b1 = (e1 << 2) | (e2 >> 4);
+    const b2 = ((e2 & 15) << 4) | (e3 >> 2);
+    const b3 = ((e3 & 3) << 6) | e4;
+    bytes[p++] = b1; if (e3 !== 64) bytes[p++] = b2; if (e4 !== 64) bytes[p++] = b3;
+  }
+  return bytes.buffer.slice(0, p);
+}
+
+// Highest ancestor below the scene (model subtree root).
+function subtreeRoot(scene, node) {
+  let cur = node;
+  let parent = null;
+  const findParent = (root, target) => {
+    let found = null;
+    root.traverse((o) => {
+      if (found) return;
+      if ((o.children || []).includes(target)) found = o;
+    });
+    return found;
+  };
+  // eslint-disable-next-line no-constant-condition
+  while (true) {
+    const p = findParent(scene, cur);
+    if (!p || p === scene) return cur;
+    parent = cur;
+    cur = p;
+  }
+}
+
+function parentMap(scene) {
+  const map = new Map();
+  scene.traverse((o) => {
+    for (const c of o.children || []) map.set(c, o);
   });
+  return map;
+}
+
+function ancestors(pmap, node) {
+  const out = [];
+  let cur = pmap.get(node);
+  let guard = 0;
+  while (cur && guard++ < 20) {
+    out.push(cur);
+    cur = pmap.get(cur);
+  }
   return out;
 }
 
+function pickRiggedMesh(scene, gender) {
+  const wantFemale = /female|woman|girl|lady/i.test(gender || '');
+  const pmap = parentMap(scene);
+  const rigged = [];
+  scene.traverse((o) => {
+    if (o && o.isSkinnedMesh) rigged.push(o);
+  });
+  const isFemaleMesh = (o) => {
+    if (/woman|female|girl|lady/i.test(o.name || '')) return true;
+    if (/man\s*\(rig\)/i.test(o.name || '')) return false;
+    return ancestors(pmap, o).some((a) => /woman|female|girl|lady/i.test(a.name || ''));
+  };
+  const match = rigged.filter((o) => isFemaleMesh(o) === wantFemale);
+  return { selected: match[0] || rigged[0] || null, rigged, pmap };
+}
+
 function RiggedFigure({ scene, gender, theme, playing, tempo, replayKey, onBones }) {
-  const bonesRef = useRef(null);
   const restRef = useRef({});
   const clockRef = useRef(0);
-  const shirtRef = useRef([]);
 
   const prepared = useMemo(() => {
-    // Gender subtree: hide the other model's root.
-    const roots = [];
-    scene.traverse((o) => { if (o && /rootJoint/i.test(o.name || '')) roots.push(o); });
-    let showIdx = 0;
-    if (/female|woman|girl|lady/i.test(gender || '')) showIdx = roots.length > 1 ? 1 : 0;
-    roots.forEach((r, i) => { r.visible = i === showIdx; });
-    // Outfit theme: clone materials, tint torso-band meshes primary.
-    let totalH = 3.5;
-    try {
-      const box = new THREE.Box3().setFromObject(scene);
-      const s = new THREE.Vector3();
-      box.getSize(s);
-      if (s.y > 0.5) totalH = s.y;
-    } catch { /* ignore */ }
-    const shirt = [];
+    const found = pickRiggedMesh(scene, gender);
+    const pmap = parentMap(scene);
+    const root = found.selected ? modelGroup(pmap, scene, found.selected) : scene;
+    const selected = found.selected;
+    const rigged = found.rigged;
+    // Show ONLY the selected rigged mesh; hide every other mesh node
+    // (the file also ships static display meshes that must never render).
+    const shown = [];
     scene.traverse((o) => {
-      if (!o || !o.isMesh || !o.material) return;
-      o.material = Array.isArray(o.material) ? o.material.map((m) => m.clone()) : o.material.clone();
-      try {
-        const b = new THREE.Box3().setFromObject(o);
-        const sz = new THREE.Vector3(); b.getSize(sz);
-        const c = new THREE.Vector3(); b.getCenter(c);
-        // bbox min unknown in world; use relative: shirt if compact mid-band
-        if (sz.y / totalH < 0.6 && c.y / totalH > 0.35 && c.y / totalH < 0.85) {
-          (Array.isArray(o.material) ? o.material : [o.material]).forEach((m) => m.color && m.color.set(theme.primary));
-          shirt.push(o.name || 'mesh');
-        }
-      } catch { /* ignore */ }
+      if (o && o.isMesh) {
+        const show = selected && o === selected;
+        o.visible = !!show;
+        if (show) shown.push(o.name || 'mesh');
+      }
     });
-    const bones = matchBones(scene);
-    Object.values(bones).forEach((bn) => { restRef.current[bn.name] = bn.quaternion.clone(); });
-    return { bones, shirt };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    const bones = matchBones(root);
+    // Capture rest pose ONCE per bone (never re-capture a posed skeleton).
+    Object.values(bones).forEach((bn) => {
+      if (!restRef.current[bn.name]) restRef.current[bn.name] = bn.quaternion.clone();
+    });
+    // Outfit theme on the visible mesh only.
+    const shirt = [];
+    if (selected) {
+      selected.material = Array.isArray(selected.material)
+        ? selected.material.map((m) => m.clone())
+        : selected.material.clone();
+      (Array.isArray(selected.material) ? selected.material : [selected.material]).forEach((m) => {
+        if (m && m.color) m.color.set(theme.primary);
+      });
+      shirt.push(selected.name || 'mesh');
+    }
+    return { bones, shirt, riggedCount: rigged.length, shown };
   }, [scene, gender, theme.primary]);
 
   useEffect(() => {
-    onBones && onBones({ ok: requiredForSitStand(prepared.bones).ok, missing: requiredForSitStand(prepared.bones).missing, shirtMeshes: prepared.shirt });
+    const req = requiredForSitStand(prepared.bones);
+    onBones && onBones({ ok: req.ok, missing: req.missing, shirtMeshes: prepared.shirt, riggedMeshes: prepared.riggedCount, shown: prepared.shown });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [prepared]);
 
@@ -101,15 +154,10 @@ function RiggedFigure({ scene, gender, theme, playing, tempo, replayKey, onBones
   return <primitive object={scene} />;
 }
 
-function Loader({ modelUri, gender, theme, playing, tempo, replayKey, onBones }) {
-  const { scene } = useGLTF(modelUri);
-  const cloned = useMemo(() => scene.clone(true), [scene]);
-  return <RiggedFigure scene={cloned} gender={gender} theme={theme} playing={playing} tempo={tempo} replayKey={replayKey} onBones={onBones} />;
-}
-
 export default function CoachAvatar({ gender, theme, playing, tempo = 'slow', replayKey = 0, onStatus, onBones }) {
-  const [uri, setUri] = useState(null);
+  const [scene, setScene] = useState(null);
   const [error, setError] = useState('');
+
   useEffect(() => {
     let live = true;
     (async () => {
@@ -117,7 +165,12 @@ export default function CoachAvatar({ gender, theme, playing, tempo = 'slow', re
         onStatus && onStatus('Loading 3D coach…');
         const asset = Asset.fromModule(require('../../assets/coach.glb'));
         await asset.downloadAsync();
-        if (live) { setUri(asset.localUri || asset.uri); onStatus && onStatus(''); }
+        const uri = asset.localUri || asset.uri;
+        const b64 = await FileSystem.readAsStringAsync(uri, { encoding: FileSystem.EncodingType.Base64 });
+        const parsed = await new GLTFLoader().parseAsync(b64ToArrayBuffer(b64), '');
+        // Skeleton-safe clone: plain .clone() corrupts skinned meshes.
+        const cloned = SkeletonUtils.clone(parsed.scene);
+        if (live) { setScene(cloned); onStatus && onStatus(''); }
       } catch (e) {
         if (live) { setError('3D model failed to load: ' + (e?.message || 'unknown')); onStatus && onStatus('3D model failed to load'); }
       }
@@ -125,7 +178,7 @@ export default function CoachAvatar({ gender, theme, playing, tempo = 'slow', re
     return () => { live = false; };
   }, []);
 
-  if (error || !uri) {
+  if (error || !scene) {
     return (
       <View style={{ height: 300, alignItems: 'center', justifyContent: 'center', backgroundColor: '#0B3D2C', borderRadius: 16 }}>
         <ActivityIndicator color="#fff" />
@@ -134,12 +187,12 @@ export default function CoachAvatar({ gender, theme, playing, tempo = 'slow', re
   }
   return (
     <View style={{ height: 340, borderRadius: 16, overflow: 'hidden', backgroundColor: '#0B3D2C' }}>
-      <Canvas camera={{ position: [0, 1.2, 3.2], fov: 42 }}>
-        <ambientLight intensity={0.9} />
-        <directionalLight position={[3, 5, 4]} intensity={1.4} />
-        <directionalLight position={[-3, 2, -2]} intensity={0.4} />
+      <Canvas camera={{ position: [0, 1.4, 3.4], fov: 42 }}>
+        <ambientLight intensity={1.1} />
+        <directionalLight position={[3, 5, 4]} intensity={1.6} />
+        <directionalLight position={[-3, 2, -2]} intensity={0.5} />
         <Suspense fallback={null}>
-          <Loader modelUri={uri} gender={gender} theme={theme} playing={playing} tempo={tempo} replayKey={replayKey} onBones={onBones} />
+          <RiggedFigure scene={scene} gender={gender} theme={theme} playing={playing} tempo={tempo} replayKey={replayKey} onBones={onBones} />
         </Suspense>
         <OrbitControls enablePan={false} minDistance={1.5} maxDistance={6} />
       </Canvas>
