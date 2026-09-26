@@ -103,13 +103,22 @@ const getCaregiver = asyncHandler(async (req, res) => {
 });
 
 // ---- Exercises ----
-const createExercise = asyncHandler(async (req, res) => ok(res, await prisma.exercise.create({ data: req.body }), 201));
+const EXERCISE_WRITABLE = ['name', 'category', 'description', 'videoUrl', 'defaultSets', 'defaultReps', 'startingPosition', 'bodySide', 'tempo', 'demoStatus', 'monitoringKey'];
+function exerciseWriteData(body) {
+  let fields = null;
+  try { fields = prisma.exercise.fields || null; } catch { fields = null; }
+  const data = {};
+  for (const k of EXERCISE_WRITABLE) {
+    if (body[k] !== undefined && (!fields || fields[k])) data[k] = body[k];
+  }
+  return data;
+}
+const createExercise = asyncHandler(async (req, res) => ok(res, await prisma.exercise.create({ data: exerciseWriteData(req.body) }), 201));
 const listExercises = asyncHandler(async (req, res) => ok(res, await prisma.exercise.findMany({ orderBy: { name: 'asc' } })));
 const updateExercise = asyncHandler(async (req, res) => {
   const existing = await prisma.exercise.findUnique({ where: { id: req.params.id } });
   if (!existing) return fail(res, 'Exercise not found', 404);
-  const { name, category, description, videoUrl, defaultSets, defaultReps, startingPosition, bodySide, tempo, demoStatus, monitoringKey } = req.body;
-  return ok(res, await prisma.exercise.update({ where: { id: req.params.id }, data: { name, category, description, videoUrl, defaultSets, defaultReps, startingPosition, bodySide, tempo, demoStatus, monitoringKey } }));
+  return ok(res, await prisma.exercise.update({ where: { id: req.params.id }, data: exerciseWriteData(req.body) }));
 });
 
 const { resolveDemo } = require('../services/demoService');
