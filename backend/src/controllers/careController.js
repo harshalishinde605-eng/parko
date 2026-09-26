@@ -465,7 +465,7 @@ const compareAssessments = asyncHandler(async (req, res) => {
   const all = (await listAssessmentsSafe(prisma, req.params.id)).slice(0, 2);
   if (all.length < 2) return ok(res, { previous: all[1] || null, current: all[0] || null, comparison: [], note: 'Need at least two assessments to compare.' });
   const [current, previous] = all;
-  return ok(res({
+  return ok(res, {
     previous, current,
     comparison: [
       measureDiff('Timed Up and Go', previous.tug, current.tug, ' sec', true),
@@ -473,7 +473,7 @@ const compareAssessments = asyncHandler(async (req, res) => {
       measureDiff('Sit-to-Stand', previous.sitToStand, current.sitToStand, ' reps', false),
       measureDiff('Balance score', previous.balanceScore, current.balanceScore, `/${current.balanceMax || previous.balanceMax || 28}`, false),
     ],
-  }));
+  });
 });
 
 // ---- Rehabilitation goals ----
