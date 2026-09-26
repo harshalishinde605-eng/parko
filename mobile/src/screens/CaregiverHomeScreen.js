@@ -99,10 +99,19 @@ export default function CaregiverHomeScreen({ navigation }) {
           {tasks.ex.length === 0 && <Text style={T.muted}>None assigned.</Text>}
           {tasks.ex.map((a) => {
             const supported = !!resolveAnalyzer(a.exercise?.name, a.exercise?.category).analyzer;
+            const selPatient = (patients || []).find((p) => p.id === sel);
+            const coachParams = { assignmentId: a.id, patientId: sel, exerciseId: a.exercise?.id, exerciseName: a.exercise?.name, category: a.exercise?.category, patientGender: selPatient?.gender, patientName: selPatient?.fullName, targetReps: a.reps || 10, instructions: a.instructions };
             return (
               <Card key={a.id}>
                 <Row between><Text style={T.h3}>{a.exercise?.name}</Text><Chip status="info" /></Row>
                 <Text style={T.muted}>{a.sets} sets × {a.reps} reps{a.durationMin ? ` · ${a.durationMin} min` : ''}{a.instructions ? `\n${a.instructions}` : ''}</Text>
+                <TouchableOpacity
+                  onPress={() => navigation.navigate('Coach', coachParams)}
+                  style={{ marginTop: 8, backgroundColor: C.primaryDeep, borderRadius: 10, paddingVertical: 10, alignItems: 'center', flexDirection: 'row', justifyContent: 'center', gap: 6 }}
+                >
+                  <Ionicons name="person" size={16} color="#fff" />
+                  <Text style={{ color: '#fff', fontWeight: '700' }}>Watch exercise coach</Text>
+                </TouchableOpacity>
                 <View style={{ flexDirection: 'row', gap: 8, marginTop: 8 }}>
                   {supported && (
                     <TouchableOpacity
