@@ -109,8 +109,8 @@ export default function CaregiverHomeScreen({ navigation }) {
                   onPress={() => navigation.navigate('Coach', coachParams)}
                   style={{ marginTop: 8, backgroundColor: C.primaryDeep, borderRadius: 10, paddingVertical: 10, alignItems: 'center', flexDirection: 'row', justifyContent: 'center', gap: 6 }}
                 >
-                  <Ionicons name="person" size={16} color="#fff" />
-                  <Text style={{ color: '#fff', fontWeight: '700' }}>Watch exercise coach</Text>
+                  <Ionicons name="play-circle" size={16} color="#fff" />
+                  <Text style={{ color: '#fff', fontWeight: '700' }}>Exercise guide</Text>
                 </TouchableOpacity>
                 <View style={{ flexDirection: 'row', gap: 8, marginTop: 8 }}>
                   {supported && (

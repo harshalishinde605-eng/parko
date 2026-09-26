@@ -81,6 +81,7 @@ export default function PatientDetailScreen({ route }) {
   const [exSets, setExSets] = useState('3');
   const [exReps, setExReps] = useState('10');
   const [exInstr, setExInstr] = useState('');
+  const [exVideo, setExVideo] = useState('');
   const [medName, setMedName] = useState('');
   const [medStr, setMedStr] = useState('');
   const [dosage, setDosage] = useState('');
@@ -209,9 +210,10 @@ export default function PatientDetailScreen({ route }) {
               <View style={{ flex: 1 }}><Field label="Reps" value={exReps} onChangeText={setExReps} keyboardType="numeric" /></View>
             </Row>
             <Field label="Instructions" placeholder="e.g. Twice daily, slow" value={exInstr} onChangeText={setExInstr} />
+            <Field label="Demo video link (optional)" placeholder="e.g. https://youtube.com/watch?v=…" value={exVideo} onChangeText={setExVideo} autoCapitalize="none" />
             <Btn title="Assign exercise" loading={busy === 'ex'} onPress={() => {
               if (exName.trim().length < 2) return setError('Write the exercise name first.');
-              return run('ex', () => api.post('/exercise-assignments', { patientId, exerciseName: exName.trim(), exerciseCategory: exCat.trim() || undefined, sets: +exSets || 1, reps: +exReps || 10, instructions: exInstr || undefined }), `Assigned “${exName.trim()}”. New names are saved to the library automatically.`);
+              return run('ex', () => api.post('/exercise-assignments', { patientId, exerciseName: exName.trim(), exerciseCategory: exCat.trim() || undefined, exerciseVideoUrl: exVideo.trim() || undefined, sets: +exSets || 1, reps: +exReps || 10, instructions: exInstr || undefined }), `Assigned “${exName.trim()}”. New names are saved to the library automatically.`);
             }} />
           </Card>
 

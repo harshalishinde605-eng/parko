@@ -130,7 +130,7 @@ const exerciseDemo = asyncHandler(async (req, res) => {
 });
 
 const assignExercise = asyncHandler(async (req, res) => {
-  const { patientId, exerciseId, exerciseName, exerciseCategory, exerciseDescription, sets, reps, durationMin, frequency, instructions, startDate, endDate } = req.body;
+  const { patientId, exerciseId, exerciseName, exerciseCategory, exerciseDescription, exerciseVideoUrl, sets, reps, durationMin, frequency, instructions, startDate, endDate } = req.body;
   const patient = await prisma.patient.findFirst({ where: { id: patientId, deletedAt: null } });
   if (!patient) return fail(res, 'Patient not found', 404);
   let exercise = null;
@@ -142,7 +142,9 @@ const assignExercise = asyncHandler(async (req, res) => {
     const name = exerciseName.trim();
     exercise = await prisma.exercise.findFirst({ where: { name: { equals: name, mode: 'insensitive' } } });
     if (!exercise) {
-      exercise = await prisma.exercise.create({ data: { name, category: exerciseCategory, description: exerciseDescription } });
+      exercise = await prisma.exercise.create({ data: { name, category: exerciseCategory, description: exerciseDescription, videoUrl: exerciseVideoUrl } });
+    } else if (exerciseVideoUrl && !exercise.videoUrl) {
+      exercise = await prisma.exercise.update({ where: { id: exercise.id }, data: { videoUrl: exerciseVideoUrl } });
     }
   }
   const a = await prisma.exerciseAssignment.create({
