@@ -185,4 +185,4 @@ async function buildTimeline(prisma, patientId, days = 7) {
   return { days, groups };
 }
 
-module.exports = { windows, buildInsights, buildTimeline, summaryFor, changesFor, attentionFor, dayKey };
+module.exports = { windows, fetchWindow, checkinDays, buildInsights, buildTimeline, summaryFor, changesFor, attentionFor, dayKey };

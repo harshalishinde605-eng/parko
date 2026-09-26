@@ -1,5 +1,5 @@
 const PDFDocument = require('pdfkit');
-function buildReportPDF(res, { patient, doctor, caregiver, stats, symptoms, observations, alerts, notes, period }) {
+function buildReportPDF(res, { patient, doctor, caregiver, stats, symptoms, observations, alerts, notes, period, comparison, symptomRecords }) {
   const doc = new PDFDocument({ margin: 40 });
   res.setHeader('Content-Type', 'application/pdf');
   res.setHeader('Content-Disposition', `attachment; filename=report-${patient.id}-${Date.now()}.pdf`);
@@ -15,6 +15,14 @@ function buildReportPDF(res, { patient, doctor, caregiver, stats, symptoms, obse
   doc.text(`Medication adherence: ${stats.meds.adherencePct}% (${stats.meds.taken}/${stats.meds.total})`);
   doc.moveDown().fontSize(14).text('Symptom averages');
   doc.fontSize(11).text(JSON.stringify(stats.symptoms.avg || {}, null, 2));
+  if (symptomRecords && symptomRecords.length) {
+    doc.moveDown().fontSize(14).text('Recorded symptom entries');
+    doc.fontSize(10).text(symptomRecords.slice(0, 40).map((s) => `${new Date(s.at).toLocaleDateString()} - ${s.type} ${s.severity}/10${s.notes ? ` - ${s.notes}` : ''}`).join('\n'));
+  }
+  if (comparison && comparison.length) {
+    doc.moveDown().fontSize(14).text('Compared with previous period');
+    doc.fontSize(10).text(comparison.map((c) => `${c.domain}: ${c.text}`).join('\n'));
+  }
   doc.moveDown().fontSize(14).text('Observations');
   doc.fontSize(10).text((observations || []).slice(0, 20).map((o) => `${new Date(o.loggedAt).toLocaleString()} - ${o.notes || o.mood || ''}`).join('\n') || 'None');
   doc.moveDown().fontSize(14).text('Alerts');

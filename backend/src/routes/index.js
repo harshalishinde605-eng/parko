@@ -57,6 +57,7 @@ router.get('/patients/:id/insights', authenticate, patientAccess, C.patientInsig
 router.get('/patients/:id/changes', authenticate, patientAccess, C.patientChanges);
 router.get('/patients/:id/summary', authenticate, patientAccess, C.patientSummary);
 router.get('/patients/:id/care-team', authenticate, patientAccess, C.patientCareTeam);
+router.get('/patients/:id/analytics', authenticate, patientAccess, C.patientAnalytics);
 
 // Notes, alerts, reports, dashboards
 router.post('/notes', authenticate, authorize('DOCTOR', 'ADMIN'), C.addNote);

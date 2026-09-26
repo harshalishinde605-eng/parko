@@ -267,7 +267,13 @@ const reportPDF = asyncHandler(async (req, res) => {
   if (!report) return fail(res, 'Not found', 404);
   const stats = await gatherStats(report.patientId, report.periodStart, report.periodEnd);
   const links = await prisma.patientCaregiver.findFirst({ where: { patientId: report.patientId }, include: { caregiver: true } });
-  return buildReportPDF(res, { patient: report.patient, doctor: report.generatedBy, caregiver: links?.caregiver || null, stats, symptoms: stats.symptomsRaw, observations: stats.observations, alerts: stats.alerts, notes: stats.notes, period: `${report.periodStart.toDateString()} - ${report.periodEnd.toDateString()}` });
+  const { fetchWindow, changesFor } = require('../utils/insights');
+  const span = report.periodEnd - report.periodStart;
+  const prev = await fetchWindow(prisma, report.patientId, { from: new Date(report.periodStart - span), to: report.periodStart });
+  const cur = { exLogs: stats.exLogs, medLogs: stats.medLogs, symptoms: stats.symptomsRaw, observations: stats.observations };
+  const comparison = changesFor(cur, prev);
+  const symptomRecords = (stats.symptomsRaw || []).map((s) => ({ at: s.loggedAt, type: s.type, severity: s.severity, notes: s.notes }));
+  return buildReportPDF(res, { patient: report.patient, doctor: report.generatedBy, caregiver: links?.caregiver || null, stats, symptoms: stats.symptomsRaw, observations: stats.observations, alerts: stats.alerts, notes: stats.notes, period: `${report.periodStart.toDateString()} - ${report.periodEnd.toDateString()}`, comparison, symptomRecords });
 });
 
 const caregiverDashboard = asyncHandler(async (req, res) => {
@@ -322,6 +328,13 @@ const patientCareTeam = asyncHandler(async (req, res) => {
     prisma.patientDoctor.findMany({ where: { patientId: req.params.id }, include: { doctor: { select: { id: true, fullName: true, email: true } } } }),
   ]);
   return ok(res, { caregivers: cgs.map((l) => l.caregiver), doctors: docs.map((l) => l.doctor) });
+});
+
+const { buildAnalytics } = require('../services/reportService');
+
+const patientAnalytics = asyncHandler(async (req, res) => {
+  const { period = 'weekly', startDate, endDate } = req.query;
+  return ok(res, await buildAnalytics(prisma, req.params.id, { period, startDate, endDate }));
 });
 
 const doctorDashboardV2 = asyncHandler(async (req, res) => {
@@ -417,4 +430,4 @@ const doctorDashboardV2 = asyncHandler(async (req, res) => {
   });
 });
 
-module.exports = { createPatient, listPatients, getPatient, updatePatient, assignCaregiver, removeCaregiver, createCaregiver, getCaregiver, createExercise, listExercises, updateExercise, assignExercise, patientExercises, logExercise, exerciseHistory, createMedicine, listMedicines, assignMedicine, patientMedicines, logMedicine, medicineHistory, logSymptom, patientSymptoms, addObservation, patientObservations, listAlerts, readAlert, addNote, createReport, listReports, reportPDF, caregiverDashboard, doctorDashboard, doctorDashboardV2, patientTimeline, patientInsights, patientChanges, patientSummary, patientCareTeam };
+module.exports = { createPatient, listPatients, getPatient, updatePatient, assignCaregiver, removeCaregiver, createCaregiver, getCaregiver, createExercise, listExercises, updateExercise, assignExercise, patientExercises, logExercise, exerciseHistory, createMedicine, listMedicines, assignMedicine, patientMedicines, logMedicine, medicineHistory, logSymptom, patientSymptoms, addObservation, patientObservations, listAlerts, readAlert, addNote, createReport, listReports, reportPDF, caregiverDashboard, doctorDashboard, doctorDashboardV2, patientTimeline, patientInsights, patientChanges, patientSummary, patientCareTeam, patientAnalytics };
