@@ -15,6 +15,8 @@ import CaregiverHomeScreen from './src/screens/CaregiverHomeScreen';
 import CaregiverLogScreen from './src/screens/CaregiverLogScreen';
 import AlertsScreen from './src/screens/AlertsScreen';
 import ProfileScreen from './src/screens/ProfileScreen';
+import AISessionScreen from './src/screens/AISessionScreen';
+import AISessionResultScreen from './src/screens/AISessionResultScreen';
 
 const Stack = createNativeStackNavigator();
 const Tab = createBottomTabNavigator();
@@ -84,7 +86,11 @@ function Root() {
           <Stack.Screen name="PatientDetail" component={PatientDetailScreen} options={({ route }) => ({ title: route.params?.patientName || 'Patient' })} />
         </>
       ) : (
-        <Stack.Screen name="Main" component={CaregiverTabs} options={{ headerShown: false }} />
+        <>
+          <Stack.Screen name="Main" component={CaregiverTabs} options={{ headerShown: false }} />
+          <Stack.Screen name="AISession" component={AISessionScreen} options={{ title: 'AI Exercise' }} />
+          <Stack.Screen name="AIResult" component={AISessionResultScreen} options={{ title: 'Session result' }} />
+        </>
       )}
     </Stack.Navigator>
   );

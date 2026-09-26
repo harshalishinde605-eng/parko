@@ -210,7 +210,13 @@ model ExerciseLog {
   durationMin  Int?      @map("duration_min")
   difficulty   Int?
   remarks      String?
-  loggedAt     DateTime  @default(now()) @map("logged_at")
+  aiAssisted   Boolean @default(false) @map("ai_assisted")
+  detectedReps Int?    @map("detected_reps")
+  durationSec  Int?    @map("duration_sec")
+  avgConfidence Float? @map("avg_confidence")
+  romSummary   String? @map("rom_summary")
+  formNotes    String? @map("form_notes")
+  loggedAt   DateTime    @default(now()) @map("logged_at")
   createdAt    DateTime  @default(now()) @map("created_at")
 
   @@map("exercise_logs")

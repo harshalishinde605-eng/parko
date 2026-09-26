@@ -6,6 +6,7 @@ import { api, errMsg } from '../../lib/api';
 import { useAuth } from '../auth';
 import { Screen, Card, Title, Banner, Loader, Empty, Chip, Row, Bar, Dots, Hero, StatTile } from '../ui';
 import QuickEvent from '../QuickEvent';
+import { resolveAnalyzer } from '../exercise/registry';
 import { C, T } from '../theme';
 
 export default function CaregiverHomeScreen({ navigation }) {
@@ -96,12 +97,33 @@ export default function CaregiverHomeScreen({ navigation }) {
           <QuickEvent patientId={sel} onSaved={() => load(true)} />
           <Text style={[T.h2, { marginTop: 8, marginBottom: 10 }]}>Today's exercises ({tasks.ex.length})</Text>
           {tasks.ex.length === 0 && <Text style={T.muted}>None assigned.</Text>}
-          {tasks.ex.map((a) => (
-            <Card key={a.id}>
-              <Row between><Text style={T.h3}>{a.exercise?.name}</Text><Chip status="info" /></Row>
-              <Text style={T.muted}>{a.sets} sets × {a.reps} reps{a.durationMin ? ` · ${a.durationMin} min` : ''}{a.instructions ? `\n${a.instructions}` : ''}</Text>
-            </Card>
-          ))}
+          {tasks.ex.map((a) => {
+            const supported = !!resolveAnalyzer(a.exercise?.name, a.exercise?.category).analyzer;
+            return (
+              <Card key={a.id}>
+                <Row between><Text style={T.h3}>{a.exercise?.name}</Text><Chip status="info" /></Row>
+                <Text style={T.muted}>{a.sets} sets × {a.reps} reps{a.durationMin ? ` · ${a.durationMin} min` : ''}{a.instructions ? `\n${a.instructions}` : ''}</Text>
+                <View style={{ flexDirection: 'row', gap: 8, marginTop: 8 }}>
+                  {supported && (
+                    <TouchableOpacity
+                      onPress={() => navigation.navigate('AISession', { assignmentId: a.id, patientId: sel, exerciseName: a.exercise?.name, category: a.exercise?.category, targetReps: a.reps || 10, instructions: a.instructions })}
+                      style={{ flex: 1, backgroundColor: C.primary, borderRadius: 10, paddingVertical: 10, alignItems: 'center', flexDirection: 'row', justifyContent: 'center', gap: 6 }}
+                    >
+                      <Ionicons name="camera" size={16} color="#fff" />
+                      <Text style={{ color: '#fff', fontWeight: '700' }}>Start AI Exercise</Text>
+                    </TouchableOpacity>
+                  )}
+                  <TouchableOpacity
+                    onPress={() => navigation.navigate('Log')}
+                    style={{ flex: 1, borderWidth: 1, borderColor: C.primary, borderRadius: 10, paddingVertical: 10, alignItems: 'center' }}
+                  >
+                    <Text style={{ color: C.primary, fontWeight: '700' }}>Manual log</Text>
+                  </TouchableOpacity>
+                </View>
+                {!supported && <Text style={[T.tiny, { marginTop: 6 }]}>AI monitoring is not available for this exercise yet.</Text>}
+              </Card>
+            );
+          })}
           <Text style={[T.h2, { marginTop: 8, marginBottom: 10 }]}>Today's medicines ({tasks.meds.length})</Text>
           {tasks.meds.length === 0 && <Text style={T.muted}>None assigned.</Text>}
           {tasks.meds.map((a) => (
