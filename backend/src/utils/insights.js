@@ -177,6 +177,20 @@ async function buildTimeline(prisma, patientId, daysOrOpts = 7) {
     want('alert') ? prisma.alert.findMany({ where: { patientId, createdAt: { gte: from, lte: to } }, orderBy: { createdAt: 'desc' }, take: 50 }) : [],
   ]);
   const src = (role) => SOURCE_LABEL[role] || 'Recorded';
+  // Patch occurred_at via raw SQL: readable even when the deployed Prisma
+  // Client was generated before the column existed (stale build cache).
+  try {
+    if (symptoms.length) {
+      const rows = await prisma.$queryRawUnsafe('SELECT id, occurred_at AS "occurredAt" FROM symptom_logs WHERE id = ANY($1)', symptoms.map((s) => s.id));
+      const map = Object.fromEntries(rows.map((r) => [r.id, r.occurredAt]));
+      symptoms.forEach((s) => { if (map[s.id]) s.occurredAt = map[s.id]; });
+    }
+    if (observations.length) {
+      const rows = await prisma.$queryRawUnsafe('SELECT id, occurred_at AS "occurredAt" FROM caregiver_observations WHERE id = ANY($1)', observations.map((o) => o.id));
+      const map = Object.fromEntries(rows.map((r) => [r.id, r.occurredAt]));
+      observations.forEach((o) => { if (map[o.id]) o.occurredAt = map[o.id]; });
+    }
+  } catch { /* occurred_at unavailable — fall back to logged time */ }
   const items = [
     ...exLogs.map((l) => ({ id: l.id, patientId, kind: 'exercise', source: src(l.loggedBy?.role), sourceRecordId: l.id, at: l.loggedAt, title: `${l.assignment?.exercise?.name || 'Exercise'} — ${l.status}`, detail: `Reps ${l.repsDone ?? '–'} · ${l.durationMin ?? '–'} min${l.remarks ? ` · ${l.remarks}` : ''}`, level: l.status === 'missed' ? 'amber' : 'green' })),
     ...medLogs.map((l) => ({ id: l.id, patientId, kind: 'medication', source: src(l.loggedBy?.role), sourceRecordId: l.id, at: l.takenAt, title: `${l.assignment?.medicine?.name || 'Medicine'} — ${l.status}`, detail: l.remarks || '', level: l.status === 'missed' ? 'amber' : 'green' })),
