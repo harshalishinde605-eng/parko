@@ -158,31 +158,39 @@ async function buildInsights(prisma, patientId, days = 7) {
   };
 }
 
-async function buildTimeline(prisma, patientId, days = 7) {
-  const to = new Date();
-  const from = new Date(to.getTime() - days * DAY);
+const SOURCE_LABEL = { CAREGIVER: 'Caregiver reported', DOCTOR: 'Doctor recorded', ADMIN: 'Care team', PATIENT: 'Patient reported' };
+
+async function buildTimeline(prisma, patientId, daysOrOpts = 7) {
+  const opts = typeof daysOrOpts === 'number' ? { days: daysOrOpts } : daysOrOpts;
+  const to = opts.endDate ? new Date(`${opts.endDate}T23:59:59`) : new Date();
+  const from = opts.startDate
+    ? new Date(`${opts.startDate}T00:00:00`)
+    : new Date(to.getTime() - (opts.days || 7) * DAY);
+  const kinds = opts.kinds ? String(opts.kinds).split(',').map((k) => k.trim().toLowerCase()) : null;
+  const want = (k) => !kinds || kinds.includes(k);
   const [exLogs, medLogs, symptoms, observations, notes, alerts] = await Promise.all([
-    prisma.exerciseLog.findMany({ where: { patientId, loggedAt: { gte: from } }, include: { assignment: { include: { exercise: true } } }, orderBy: { loggedAt: 'desc' }, take: 100 }),
-    prisma.medicineLog.findMany({ where: { patientId, takenAt: { gte: from } }, include: { assignment: { include: { medicine: true } } }, orderBy: { takenAt: 'desc' }, take: 100 }),
-    prisma.symptomLog.findMany({ where: { patientId, loggedAt: { gte: from } }, orderBy: { loggedAt: 'desc' }, take: 100 }),
-    prisma.caregiverObservation.findMany({ where: { patientId, loggedAt: { gte: from } }, orderBy: { loggedAt: 'desc' }, take: 100 }),
-    prisma.doctorNote.findMany({ where: { patientId, createdAt: { gte: from } }, orderBy: { createdAt: 'desc' }, take: 50 }),
-    prisma.alert.findMany({ where: { patientId, createdAt: { gte: from } }, orderBy: { createdAt: 'desc' }, take: 50 }),
+    want('exercise') ? prisma.exerciseLog.findMany({ where: { patientId, loggedAt: { gte: from, lte: to } }, include: { assignment: { include: { exercise: true } }, loggedBy: { select: { role: true } } }, orderBy: { loggedAt: 'desc' }, take: 100 }) : [],
+    want('medication') ? prisma.medicineLog.findMany({ where: { patientId, takenAt: { gte: from, lte: to } }, include: { assignment: { include: { medicine: true } }, loggedBy: { select: { role: true } } }, orderBy: { takenAt: 'desc' }, take: 100 }) : [],
+    want('symptom') ? prisma.symptomLog.findMany({ where: { patientId, loggedAt: { gte: from, lte: to } }, include: { loggedBy: { select: { role: true } } }, orderBy: { loggedAt: 'desc' }, take: 100 }) : [],
+    want('observation') ? prisma.caregiverObservation.findMany({ where: { patientId, loggedAt: { gte: from, lte: to } }, include: { loggedBy: { select: { role: true } } }, orderBy: { loggedAt: 'desc' }, take: 100 }) : [],
+    want('note') ? prisma.doctorNote.findMany({ where: { patientId, createdAt: { gte: from, lte: to } }, orderBy: { createdAt: 'desc' }, take: 50 }) : [],
+    want('alert') ? prisma.alert.findMany({ where: { patientId, createdAt: { gte: from, lte: to } }, orderBy: { createdAt: 'desc' }, take: 50 }) : [],
   ]);
+  const src = (role) => SOURCE_LABEL[role] || 'Recorded';
   const items = [
-    ...exLogs.map((l) => ({ at: l.loggedAt, kind: 'exercise', title: `${l.assignment?.exercise?.name || 'Exercise'} — ${l.status}`, detail: `Reps ${l.repsDone ?? '–'} · ${l.durationMin ?? '–'} min${l.remarks ? ` · ${l.remarks}` : ''}`, level: l.status === 'missed' ? 'amber' : 'green' })),
-    ...medLogs.map((l) => ({ at: l.takenAt, kind: 'medication', title: `${l.assignment?.medicine?.name || 'Medicine'} — ${l.status}`, detail: l.remarks || '', level: l.status === 'missed' ? 'amber' : 'green' })),
-    ...symptoms.map((s) => ({ at: s.loggedAt, kind: 'symptom', title: `${s.type} ${s.severity}/10`, detail: s.notes || '', level: s.severity >= 8 ? 'red' : s.severity >= 5 ? 'amber' : 'green' })),
-    ...observations.map((o) => ({ at: o.loggedAt, kind: 'observation', title: o.falls ? 'Fall reported' : 'Caregiver observation', detail: o.notes || `Mood ${o.mood || '–'} · Sleep ${o.sleepHours ?? '–'}h`, level: o.falls ? 'red' : 'green' })),
-    ...notes.map((n) => ({ at: n.createdAt, kind: 'note', title: 'Doctor note', detail: n.note, level: 'info' })),
-    ...alerts.map((a) => ({ at: a.createdAt, kind: 'alert', title: a.message, detail: a.type, level: a.severity === 'critical' ? 'red' : a.severity })),
+    ...exLogs.map((l) => ({ id: l.id, patientId, kind: 'exercise', source: src(l.loggedBy?.role), sourceRecordId: l.id, at: l.loggedAt, title: `${l.assignment?.exercise?.name || 'Exercise'} — ${l.status}`, detail: `Reps ${l.repsDone ?? '–'} · ${l.durationMin ?? '–'} min${l.remarks ? ` · ${l.remarks}` : ''}`, level: l.status === 'missed' ? 'amber' : 'green' })),
+    ...medLogs.map((l) => ({ id: l.id, patientId, kind: 'medication', source: src(l.loggedBy?.role), sourceRecordId: l.id, at: l.takenAt, title: `${l.assignment?.medicine?.name || 'Medicine'} — ${l.status}`, detail: l.remarks || '', level: l.status === 'missed' ? 'amber' : 'green' })),
+    ...symptoms.map((s) => ({ id: s.id, patientId, kind: 'symptom', source: src(s.loggedBy?.role), sourceRecordId: s.id, at: s.occurredAt || s.loggedAt, severity: s.severity, title: `${s.type} ${s.severity}/10`, detail: s.notes || '', level: s.severity >= 8 ? 'red' : s.severity >= 5 ? 'amber' : 'green' })),
+    ...observations.map((o) => ({ id: o.id, patientId, kind: 'observation', source: src(o.loggedBy?.role), sourceRecordId: o.id, at: o.occurredAt || o.loggedAt, title: o.falls ? 'Fall reported' : 'Caregiver observation', detail: o.notes || `Mood ${o.mood || '–'} · Sleep ${o.sleepHours ?? '–'}h`, level: o.falls ? 'red' : 'green' })),
+    ...notes.map((n) => ({ id: n.id, patientId, kind: 'note', source: 'Doctor recorded', sourceRecordId: n.id, at: n.createdAt, title: 'Doctor note', detail: n.note, level: 'info' })),
+    ...alerts.map((a) => ({ id: a.id, patientId, kind: 'alert', source: 'System', sourceRecordId: a.id, at: a.createdAt, title: a.message, detail: a.type, level: a.severity === 'critical' ? 'red' : a.severity })),
   ].sort((a, b) => new Date(b.at) - new Date(a.at));
   const groups = {};
   for (const it of items) {
     const k = dayKey(it.at);
     (groups[k] = groups[k] || []).push(it);
   }
-  return { days, groups };
+  return { from: from.toISOString().slice(0, 10), to: to.toISOString().slice(0, 10), groups };
 }
 
 module.exports = { windows, fetchWindow, checkinDays, buildInsights, buildTimeline, summaryFor, changesFor, attentionFor, dayKey };

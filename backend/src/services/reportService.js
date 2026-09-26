@@ -130,6 +130,10 @@ async function buildAnalytics(prisma, patientId, opts = {}) {
   };
   comparison.walkingDifficultyRecords.difference = diff(comparison.walkingDifficultyRecords.current, comparison.walkingDifficultyRecords.previous);
   comparison.tremorRecords.difference = diff(comparison.tremorRecords.current, comparison.tremorRecords.previous);
+  for (const k of Object.keys(comparison)) {
+    const d = comparison[k].difference;
+    comparison[k].change = d > 0 ? 'INCREASED' : d < 0 ? 'DECREASED' : 'NO_CHANGE';
+  }
 
   return {
     patient: { id: patient.id, name: patient.fullName },

@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { View, Text, TouchableOpacity } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { api, errMsg } from '../lib/api';
-import { Card, Btn, Field, Banner, BigButton, SectionTitle } from './ui';
+import { Card, Btn, Field, Banner, BigButton, SectionTitle, Seg } from './ui';
 import { C, T } from './theme';
 
 const EVENTS = [
@@ -21,6 +21,7 @@ export default function QuickEvent({ patientId, onSaved }) {
   const [ev, setEv] = useState(null);
   const [sev, setSev] = useState(4);
   const [note, setNote] = useState('');
+  const [when, setWhen] = useState('now');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   const [okMsg, setOkMsg] = useState('');
@@ -29,17 +30,24 @@ export default function QuickEvent({ patientId, onSaved }) {
     return <BigButton title="Something happened?" sub="Tap to record it in seconds" icon="flash" onPress={() => setOpen(true)} />;
   }
 
+  const whenOptions = () => {
+    const now = Date.now();
+    const at = (h, m = 0) => { const d = new Date(); d.setHours(h, m, 0, 0); return d.getTime() > now ? d.getTime() - 864e5 : d.getTime(); };
+    return { now, hour1: now - 36e5, morning: at(9), evening: at(20) };
+  };
+
   const save = async () => {
     if (!patientId) return setError('No patient selected.');
     setBusy(true); setError(''); setOkMsg('');
     try {
+      const occurredAt = new Date(whenOptions()[when]).toISOString();
       const text = (ev.prefix || '') + (note.trim() || ev.label);
       if (ev.kind === 'symptom') {
-        await api.post('/symptom-logs', { patientId, type: ev.type, severity: sev, notes: text });
+        await api.post('/symptom-logs', { patientId, type: ev.type, severity: sev, notes: text, occurredAt });
       } else if (ev.kind === 'fall') {
-        await api.post('/observations', { patientId, falls: true, notes: text });
+        await api.post('/observations', { patientId, falls: true, notes: text, occurredAt });
       } else {
-        await api.post('/observations', { patientId, notes: `${ev.label}: ${note.trim() || 'reported'}` });
+        await api.post('/observations', { patientId, notes: `${ev.label}: ${note.trim() || 'reported'}`, occurredAt });
       }
       setOkMsg('Recorded. The doctor will see this.');
       setNote(''); setEv(null); setOpen(false);
@@ -85,6 +93,8 @@ export default function QuickEvent({ patientId, onSaved }) {
             </>
           )}
           <Field label="What happened? (optional note)" value={note} onChangeText={setNote} placeholder="e.g. after lunch, needed support" />
+          <Text style={{ fontSize: 12, fontWeight: '700', color: C.muted, marginBottom: 6 }}>WHEN DID IT HAPPEN?</Text>
+          <Seg options={[{ label: 'Just now', value: 'now' }, { label: '1 hr ago', value: 'hour1' }, { label: 'Morning', value: 'morning' }, { label: 'Evening', value: 'evening' }]} value={when} onChange={setWhen} />
           <Btn title={`Save “${ev.label}”`} loading={busy} onPress={save} />
           <Btn title="Cancel" kind="ghost" onPress={() => { setOpen(false); setEv(null); }} />
         </>

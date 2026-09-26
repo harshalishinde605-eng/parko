@@ -11,8 +11,8 @@ const exerciseLogSchema = z.object({ assignmentId: z.string(), patientId: z.stri
 const medicineSchema = z.object({ name: z.string().min(2), strength: z.string().optional(), form: z.string().optional() });
 const medicineAssignSchema = z.object({ patientId: z.string(), medicineId: z.string().optional(), medicineName: z.string().min(2).optional(), medicineStrength: z.string().optional(), medicineForm: z.string().optional(), dosage: z.string(), scheduleTimes: z.array(z.string()).default([]), withFood: z.boolean().default(false), instructions: z.string().optional() }).refine((d) => d.medicineId || d.medicineName, { message: 'medicineId or medicineName is required' });
 const medicineLogSchema = z.object({ assignmentId: z.string(), patientId: z.string(), status: z.enum(['taken', 'missed', 'delayed']), remarks: z.string().optional() });
-const symptomLogSchema = z.object({ patientId: z.string(), type: z.enum(['tremor', 'stiffness', 'pain', 'fatigue', 'balance', 'walking', 'other']), severity: z.number().min(1).max(10), notes: z.string().optional() });
-const observationSchema = z.object({ patientId: z.string(), mood: z.string().optional(), appetite: z.string().optional(), sleepHours: z.number().optional(), falls: z.boolean().default(false), notes: z.string().optional() });
+const symptomLogSchema = z.object({ patientId: z.string(), type: z.enum(['tremor', 'stiffness', 'pain', 'fatigue', 'balance', 'walking', 'other']), severity: z.number().min(1).max(10), notes: z.string().optional(), occurredAt: z.string().optional() });
+const observationSchema = z.object({ patientId: z.string(), mood: z.string().optional(), appetite: z.string().optional(), sleepHours: z.number().optional(), falls: z.boolean().default(false), notes: z.string().optional(), occurredAt: z.string().optional() });
 
 const validate = (schema) => (req, res, next) => {
   const parsed = schema.safeParse(req.body);

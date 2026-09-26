@@ -1,5 +1,5 @@
 import React, { useCallback, useState, useEffect } from 'react';
-import { View, Text } from 'react-native';
+import { View, Text, TouchableOpacity } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
 import { api, errMsg } from '../../lib/api';
@@ -67,6 +67,8 @@ export default function PatientDetailScreen({ route }) {
   const [ins, setIns] = useState(null);
   const [timeline, setTimeline] = useState({ groups: {} });
   const [reports, setReports] = useState([]);
+  const [plan, setPlan] = useState({ ex: [], meds: [] });
+  const [tlFilter, setTlFilter] = useState('all');
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState('');
@@ -97,18 +99,21 @@ export default function PatientDetailScreen({ route }) {
     if (!silent) setLoading(true);
     setError('');
     try {
-      const [p, i, tl, rp, tm] = await Promise.all([
+      const [p, i, tl, rp, tm, pex, pmed] = await Promise.all([
         api.get(`/patients/${patientId}`),
         api.get(`/patients/${patientId}/insights?days=7`),
         api.get(`/patients/${patientId}/timeline?days=7`),
         api.get(`/patients/${patientId}/reports`),
         api.get(`/patients/${patientId}/care-team`),
+        api.get(`/patients/${patientId}/exercises`).catch(() => ({ data: { data: [] } })),
+        api.get(`/patients/${patientId}/medicines`).catch(() => ({ data: { data: [] } })),
       ]);
       setPatient(p.data.data);
       setIns(i.data.data);
       setTimeline(tl.data.data);
       setReports(rp.data.data || []);
       setTeam(tm.data.data);
+      setPlan({ ex: pex.data.data || [], meds: pmed.data.data || [] });
     } catch (e) {
       setError(errMsg(e));
     } finally {
@@ -175,6 +180,26 @@ export default function PatientDetailScreen({ route }) {
           </Row>
           {(ins?.attention || []).map((a, i) => <AttentionItem key={i} level={a.level} title={a.title} detail={a.detail} />)}
 
+          <SectionTitle>Recent activity</SectionTitle>
+          {(() => {
+            const flat = Object.entries(timeline.groups || {}).sort((a, b) => (a[0] < b[0] ? 1 : -1)).flatMap(([d, items]) => items.slice(0, 3).map((it) => ({ ...it, day: d }))).slice(0, 3);
+            if (!flat.length) return <Text style={T.muted}>No care activity recorded yet.</Text>;
+            return flat.map((it, i) => (
+              <Card key={i}>
+                <Text style={[T.tiny, { fontWeight: '700' }]}>{it.day} · {new Date(it.at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</Text>
+                <Text style={[T.body, { fontWeight: '700' }]}>{it.title}</Text>
+                {!!it.source && <Text style={T.tiny}>{it.source}</Text>}
+              </Card>
+            ));
+          })()}
+
+          <SectionTitle>Current care plan</SectionTitle>
+          <Card>
+            {(plan.ex.length === 0 && plan.meds.length === 0) && <Text style={T.muted}>No active assignments yet — assign below.</Text>}
+            {plan.ex.map((a) => <Text key={a.id} style={[T.body, { marginBottom: 4 }]}>🏃 {a.exercise?.name} — {a.sets}×{a.reps}</Text>)}
+            {plan.meds.map((a) => <Text key={a.id} style={[T.body, { marginBottom: 4 }]}>💊 {a.medicine?.name}{a.medicine?.strength ? ` ${a.medicine.strength}` : ''} — {a.dosage}</Text>)}
+          </Card>
+
           <SectionTitle>Assign exercise — just write it</SectionTitle>
           <Card>
             <Field label="Exercise name" placeholder="e.g. Sit-to-Stand" value={exName} onChangeText={setExName} />
@@ -222,24 +247,37 @@ export default function PatientDetailScreen({ route }) {
       {tab === 'tl' && (
         <>
           <SectionTitle>Care timeline — last 7 days</SectionTitle>
-          {Object.keys(timeline.groups || {}).length === 0 && <Banner kind="warn">No records yet this week.</Banner>}
-          {Object.entries(timeline.groups || {}).sort((a, b) => (a[0] < b[0] ? 1 : -1)).map(([day, items]) => (
-            <View key={day}>
-              <Text style={[T.h3, { marginTop: 10, marginBottom: 6 }]}>{day}</Text>
-              {items.map((it, i) => (
-                <Card key={i}>
-                  <Row>
-                    <Ionicons name={KIND_ICON[it.kind] || 'ellipse'} size={20} color={C.primary} />
-                    <View style={{ flex: 1 }}>
-                      <Text style={[T.tiny, { fontWeight: '700' }]}>{new Date(it.at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })} · {(KIND_LABEL[it.kind] || it.kind).toUpperCase()}</Text>
-                      <Text style={[T.body, { fontWeight: '700' }]}>{it.title}</Text>
-                      {!!it.detail && <Text style={T.muted}>{it.detail}</Text>}
-                    </View>
-                  </Row>
-                </Card>
-              ))}
-            </View>
-          ))}
+          <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginBottom: 8 }}>
+            {[{ label: 'All', value: 'all' }, { label: 'Medication', value: 'medication' }, { label: 'Exercise', value: 'exercise' }, { label: 'Symptoms', value: 'symptom' }, { label: 'Observations', value: 'observation' }, { label: 'Notes', value: 'note' }, { label: 'Alerts', value: 'alert' }].map((f) => (
+              <TouchableOpacity key={f.value} onPress={() => setTlFilter(f.value)} style={{ paddingHorizontal: 12, paddingVertical: 7, borderRadius: 16, backgroundColor: tlFilter === f.value ? C.primary : C.white, borderWidth: 1, borderColor: tlFilter === f.value ? C.primary : C.line }}>
+                <Text style={{ fontSize: 12, fontWeight: '700', color: tlFilter === f.value ? C.white : C.ink }}>{f.label}</Text>
+              </TouchableOpacity>
+            ))}
+          </View>
+          {(() => {
+            const entries = Object.entries(timeline.groups || {}).sort((a, b) => (a[0] < b[0] ? 1 : -1))
+              .map(([day, items]) => [day, items.filter((it) => tlFilter === 'all' || it.kind === tlFilter)])
+              .filter(([, items]) => items.length);
+            if (!entries.length) return <Banner kind="warn">No care activity recorded yet for this filter.</Banner>;
+            return entries.map(([day, items]) => (
+              <View key={day}>
+                <Text style={[T.h3, { marginTop: 10, marginBottom: 6 }]}>{day}</Text>
+                {items.map((it, i) => (
+                  <Card key={it.id || i}>
+                    <Row>
+                      <Ionicons name={KIND_ICON[it.kind] || 'ellipse'} size={20} color={C.primary} />
+                      <View style={{ flex: 1 }}>
+                        <Text style={[T.tiny, { fontWeight: '700' }]}>{new Date(it.at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })} · {(KIND_LABEL[it.kind] || it.kind).toUpperCase()}</Text>
+                        <Text style={[T.body, { fontWeight: '700' }]}>{it.title}</Text>
+                        {!!it.detail && <Text style={T.muted}>{it.detail}</Text>}
+                        {!!it.source && <Text style={[T.tiny, { marginTop: 2 }]}>👤 {it.source}</Text>}
+                      </View>
+                    </Row>
+                  </Card>
+                ))}
+              </View>
+            ));
+          })()}
         </>
       )}
 
@@ -325,6 +363,7 @@ export default function PatientDetailScreen({ route }) {
 
           <SectionTitle>Care summary</SectionTitle>
           <Card>
+            {!(ins?.summary?.paragraphs || []).length && <Text style={T.muted}>Not enough recorded data to generate a summary yet.</Text>}
             {(ins?.summary?.paragraphs || []).map((p, i) => (
               <Text key={i} style={[T.body, { marginBottom: 8 }]}>{p}</Text>
             ))}

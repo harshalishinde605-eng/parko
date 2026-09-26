@@ -63,6 +63,7 @@ router.get('/patients/:id/analytics', authenticate, patientAccess, C.patientAnal
 router.post('/notes', authenticate, authorize('DOCTOR', 'ADMIN'), C.addNote);
 router.get('/alerts', authenticate, C.listAlerts);
 router.put('/alerts/:id/read', authenticate, C.readAlert);
+router.put('/alerts/:id/resolve', authenticate, C.resolveAlert);
 router.get('/patients/:id/reports', authenticate, patientAccess, C.listReports);
 router.post('/patients/:id/reports', authenticate, patientAccess, C.createReport);
 router.get('/reports/:id/pdf', authenticate, C.reportPDF);

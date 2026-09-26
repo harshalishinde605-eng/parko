@@ -72,6 +72,7 @@ const assignCaregiver = asyncHandler(async (req, res) => {
     update: {}, create: { patientId: req.params.id, caregiverId: cgId },
   });
   await audit(req.user.id, 'assign_caregiver', 'patients', req.params.id, req.ip);
+  await prisma.alert.create({ data: { patientId: req.params.id, type: 'care_team', severity: 'info', message: 'A caregiver was linked to this patient' } });
   return ok(res, link, 201);
 });
 
@@ -202,7 +203,8 @@ const medicineHistory = asyncHandler(async (req, res) => {
 const logSymptom = asyncHandler(async (req, res) => {
   const patient = await prisma.patient.findFirst({ where: { id: req.body.patientId, deletedAt: null } });
   if (!patient) return fail(res, 'Patient not found', 404);
-  const log = await prisma.symptomLog.create({ data: { ...req.body, loggedById: req.user.id } });
+  const occurredAt = req.body.occurredAt && !Number.isNaN(new Date(req.body.occurredAt).getTime()) ? new Date(req.body.occurredAt) : undefined;
+  const log = await prisma.symptomLog.create({ data: { ...req.body, occurredAt, loggedById: req.user.id } });
   await evaluateAndCreateAlerts(prisma, { patientId: req.body.patientId, kind: 'symptom', payload: req.body });
   await audit(req.user.id, 'log_symptom', 'symptom_logs', log.id, req.ip);
   return ok(res, log, 201);
@@ -214,7 +216,8 @@ const patientSymptoms = asyncHandler(async (req, res) => {
 const addObservation = asyncHandler(async (req, res) => {
   const patient = await prisma.patient.findFirst({ where: { id: req.body.patientId, deletedAt: null } });
   if (!patient) return fail(res, 'Patient not found', 404);
-  const o = await prisma.caregiverObservation.create({ data: { ...req.body, loggedById: req.user.id } });
+  const occurredAt = req.body.occurredAt && !Number.isNaN(new Date(req.body.occurredAt).getTime()) ? new Date(req.body.occurredAt) : undefined;
+  const o = await prisma.caregiverObservation.create({ data: { ...req.body, occurredAt, loggedById: req.user.id } });
   await evaluateAndCreateAlerts(prisma, { patientId: req.body.patientId, kind: 'observation', payload: req.body });
   await audit(req.user.id, 'add_observation', 'caregiver_observations', o.id, req.ip);
   return ok(res, o, 201);
@@ -224,8 +227,14 @@ const patientObservations = asyncHandler(async (req, res) => ok(res, await prism
 // ---- Alerts ----
 const listAlerts = asyncHandler(async (req, res) => {
   const ids = await scopedPatientIds(req.user);
-  const alerts = await prisma.alert.findMany({ where: { ...(ids ? { patientId: { in: ids } } : {}), ...(req.query.unread === 'true' ? { isRead: false } : {}) }, orderBy: { createdAt: 'desc' }, take: 100 });
+  const alerts = await prisma.alert.findMany({ where: { ...(ids ? { patientId: { in: ids } } : {}), ...(req.query.unread === 'true' ? { isRead: false } : {}) }, include: { patient: { select: { id: true, fullName: true } } }, orderBy: { createdAt: 'desc' }, take: 100 });
   return ok(res, alerts);
+});
+const resolveAlert = asyncHandler(async (req, res) => {
+  const existing = await prisma.alert.findUnique({ where: { id: req.params.id } });
+  if (!existing) return fail(res, 'Alert not found', 404);
+  await audit(req.user.id, 'resolve_alert', 'alerts', existing.id, req.ip);
+  return ok(res, await prisma.alert.update({ where: { id: req.params.id }, data: { isRead: true, resolvedAt: new Date() } }));
 });
 const readAlert = asyncHandler(async (req, res) => {
   const existing = await prisma.alert.findUnique({ where: { id: req.params.id } });
@@ -237,6 +246,7 @@ const readAlert = asyncHandler(async (req, res) => {
 const addNote = asyncHandler(async (req, res) => {
   const { patientId, note } = req.body;
   const n = await prisma.doctorNote.create({ data: { patientId, doctorId: req.user.id, note } });
+  await prisma.alert.create({ data: { patientId, type: 'note', severity: 'info', message: 'A clinical note was added' } });
   return ok(res, n, 201);
 });
 
@@ -303,7 +313,8 @@ const doctorDashboard = asyncHandler(async (req, res) => {
 // ---- Intelligence: timeline, insights, changes, summary, care team ----
 const patientTimeline = asyncHandler(async (req, res) => {
   const days = Math.min(30, Math.max(1, parseInt(req.query.days || '7', 10)));
-  return ok(res, await buildTimeline(prisma, req.params.id, days));
+  const { startDate, endDate, kinds } = req.query;
+  return ok(res, await buildTimeline(prisma, req.params.id, { days, startDate, endDate, kinds }));
 });
 
 const patientInsights = asyncHandler(async (req, res) => {
@@ -430,4 +441,4 @@ const doctorDashboardV2 = asyncHandler(async (req, res) => {
   });
 });
 
-module.exports = { createPatient, listPatients, getPatient, updatePatient, assignCaregiver, removeCaregiver, createCaregiver, getCaregiver, createExercise, listExercises, updateExercise, assignExercise, patientExercises, logExercise, exerciseHistory, createMedicine, listMedicines, assignMedicine, patientMedicines, logMedicine, medicineHistory, logSymptom, patientSymptoms, addObservation, patientObservations, listAlerts, readAlert, addNote, createReport, listReports, reportPDF, caregiverDashboard, doctorDashboard, doctorDashboardV2, patientTimeline, patientInsights, patientChanges, patientSummary, patientCareTeam, patientAnalytics };
+module.exports = { createPatient, listPatients, getPatient, updatePatient, assignCaregiver, removeCaregiver, createCaregiver, getCaregiver, createExercise, listExercises, updateExercise, assignExercise, patientExercises, logExercise, exerciseHistory, createMedicine, listMedicines, assignMedicine, patientMedicines, logMedicine, medicineHistory, logSymptom, patientSymptoms, addObservation, patientObservations, listAlerts, readAlert, resolveAlert, addNote, createReport, listReports, reportPDF, caregiverDashboard, doctorDashboard, doctorDashboardV2, patientTimeline, patientInsights, patientChanges, patientSummary, patientCareTeam, patientAnalytics };

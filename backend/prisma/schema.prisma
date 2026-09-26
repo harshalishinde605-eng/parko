@@ -279,6 +279,7 @@ model SymptomLog {
   type       SymptomType
   severity   Int
   notes      String?
+  occurredAt DateTime? @map("occurred_at")
   loggedAt   DateTime    @default(now()) @map("logged_at")
   createdAt  DateTime    @default(now()) @map("created_at")
 
@@ -298,6 +299,7 @@ model CaregiverObservation {
   sleepHours Float?   @map("sleep_hours")
   falls      Boolean  @default(false)
   notes      String?
+  occurredAt DateTime? @map("occurred_at")
   loggedAt   DateTime @default(now()) @map("logged_at")
   createdAt  DateTime @default(now()) @map("created_at")
 
@@ -313,6 +315,7 @@ model Alert {
   severity  AlertSeverity @default(info)
   message   String
   isRead    Boolean       @default(false) @map("is_read")
+  resolvedAt DateTime?    @map("resolved_at")
   createdAt DateTime      @default(now()) @map("created_at")
 
   @@map("alerts")

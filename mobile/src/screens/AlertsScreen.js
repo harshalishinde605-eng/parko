@@ -2,7 +2,7 @@ import React, { useCallback, useState } from 'react';
 import { TouchableOpacity, Text } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
 import { api, errMsg } from '../../lib/api';
-import { Screen, Card, Title, Banner, Loader, Empty, Chip, Row, SectionTitle } from '../ui';
+import { Screen, Card, Title, Banner, Loader, Empty, Chip, Row, SectionTitle, Btn } from '../ui';
 import { T } from '../theme';
 
 function group(alerts) {
@@ -13,7 +13,10 @@ function group(alerts) {
   };
 }
 
-export default function AlertsScreen() {
+export default function AlertsScreen({ navigation }) {
+  const canOpenPatient = () => {
+    try { return (navigation.getState()?.routeNames || []).includes('PatientDetail'); } catch { return false; }
+  };
   const [alerts, setAlerts] = useState([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -43,13 +46,29 @@ export default function AlertsScreen() {
     }
   };
 
+  const markReviewed = async (id) => {
+    try {
+      await api.put(`/alerts/${id}/resolve`);
+      setAlerts((list) => list.map((a) => (a.id === id ? { ...a, isRead: true, resolvedAt: new Date().toISOString() } : a)));
+    } catch (e) {
+      setError(errMsg(e));
+    }
+  };
+
   const g = group(alerts);
   const renderRow = (a) => (
     <TouchableOpacity key={a.id} onPress={() => !a.isRead && markRead(a.id)} activeOpacity={a.isRead ? 1 : 0.7}>
       <Card style={a.isRead ? { opacity: 0.65 } : null}>
         <Row between><Chip status={a.severity} /><Text style={T.tiny}>{a.type}</Text></Row>
-        <Text style={[T.body, { fontWeight: '700', marginTop: 6 }]}>{a.message}</Text>
-        <Text style={T.tiny}>{new Date(a.createdAt).toLocaleString()}{!a.isRead ? ' · tap to mark read' : ''}</Text>
+        {!!a.patient?.fullName && <Text style={[T.h3, { marginTop: 6 }]}>{a.patient.fullName}</Text>}
+        <Text style={[T.body, { fontWeight: '700', marginTop: 2 }]}>{a.message}</Text>
+        <Text style={T.tiny}>{new Date(a.createdAt).toLocaleString()}{a.resolvedAt ? ' · reviewed' : !a.isRead ? ' · tap to mark read' : ''}</Text>
+        {!a.isRead && a.severity === 'critical' && (
+          <Btn title="Mark reviewed" kind="secondary" onPress={() => markReviewed(a.id)} />
+        )}
+        {a.patient && canOpenPatient() && (
+          <Btn title="View event in timeline" kind="ghost" onPress={() => navigation.navigate('PatientDetail', { patientId: a.patient.id, patientName: a.patient.fullName, tab: 'tl' })} />
+        )}
       </Card>
     </TouchableOpacity>
   );
@@ -59,7 +78,7 @@ export default function AlertsScreen() {
       <Title sub="Falls and severe entries first — routine updates last">Alerts</Title>
       {!!error && <Banner kind="danger">{error}</Banner>}
       {loading ? <Loader /> : alerts.length === 0 ? (
-        <Empty>No alerts. Falls, severe symptoms, missed doses and new assignments will appear here.</Empty>
+        <Empty>No items need your review. Falls, severe entries, assignment updates and observations will appear here.</Empty>
       ) : (
         <>
           {g.review.length > 0 && <><SectionTitle>Needs review</SectionTitle>{g.review.map(renderRow)}</>}
