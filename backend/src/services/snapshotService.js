@@ -108,11 +108,14 @@ async function generateSnapshot(prisma, { patientId, doctorId, days = 7 }) {
   const hash = sourceHash(structured);
   const periodStart = new Date(Date.now() - days * 864e5);
 
-  const cached = await prisma.aiCareSummary.findFirst({
-    where: { patientId, periodStart: { gte: new Date(periodStart.getTime() - 36e5) }, sourceHash: hash },
-    orderBy: { createdAt: 'desc' },
-  });
-  if (cached) {
+  // Raw SQL on purpose: works even if the deployed Prisma Client was
+  // generated before the ai_care_summaries model existed (stale build cache).
+  const cachedRows = await prisma.$queryRawUnsafe(
+    'SELECT "summary_text" AS "summaryText", engine FROM ai_care_summaries WHERE patient_id = $1 AND period_start >= $2 AND source_hash = $3 ORDER BY created_at DESC LIMIT 1',
+    patientId, new Date(periodStart.getTime() - 36e5), hash
+  );
+  if (cachedRows.length) {
+    const cached = cachedRows[0];
     return { paragraphs: cached.summaryText.split('\n'), engine: cached.engine, cached: true, structured, disclaimer: DISCLAIMER };
   }
 
@@ -122,9 +125,10 @@ async function generateSnapshot(prisma, { patientId, doctorId, days = 7 }) {
     text = renderTemplate(structured, ins.summary.paragraphs);
     engine = 'template';
   }
-  await prisma.aiCareSummary.create({
-    data: { patientId, doctorId, periodStart, periodEnd: new Date(), sourceHash: hash, summaryText: text, engine },
-  });
+  await prisma.$executeRawUnsafe(
+    'INSERT INTO ai_care_summaries (id, patient_id, doctor_id, period_start, period_end, source_hash, summary_text, engine, created_at, updated_at) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,NOW(),NOW())',
+    crypto.randomUUID(), patientId, doctorId, periodStart, new Date(), hash, text, engine
+  );
   return { paragraphs: text.split('\n'), engine, cached: false, structured, disclaimer: DISCLAIMER };
 }
 
