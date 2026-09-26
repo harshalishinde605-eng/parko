@@ -85,7 +85,7 @@ export default function ProgressTab({ patientId, navigation }) {
             <Card key={i}><Text style={T.body}>{o.text || 'Observation'}</Text><Text style={T.tiny}>{new Date(o.at).toLocaleString()}</Text></Card>
           ))}
 
-          <Btn title="+ New assessment" kind="secondary" onPress={() => navigation.navigate('PatientDetail', { patientId, tab: 'as' })} />
+          <Btn title="+ New assessment" kind="secondary" onPress={() => navigation.setParams({ tab: 'as' })} />
 
           <SectionTitle>Reports</SectionTitle>
           <Row>
