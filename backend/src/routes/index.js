@@ -67,5 +67,6 @@ router.post('/patients/:id/reports', authenticate, patientAccess, C.createReport
 router.get('/reports/:id/pdf', authenticate, C.reportPDF);
 router.get('/dashboard/caregiver', authenticate, authorize('CAREGIVER', 'ADMIN'), C.caregiverDashboard);
 router.get('/dashboard/doctor', authenticate, authorize('DOCTOR', 'ADMIN'), C.doctorDashboard);
+router.get('/doctor/dashboard', authenticate, authorize('DOCTOR', 'ADMIN'), C.doctorDashboardV2);
 
 module.exports = router;

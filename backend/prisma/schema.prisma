@@ -124,6 +124,7 @@ model Patient {
   alerts       Alert[]
   doctorNotes  DoctorNote[]
   reports      Report[]
+  aiSummaries  AiCareSummary[]
 
   @@map("patients")
   @@index([fullName])
@@ -345,6 +346,23 @@ model Report {
 
   @@map("reports")
   @@index([patientId, type])
+}
+
+model AiCareSummary {
+  id          String   @id @default(cuid())
+  patientId   String   @map("patient_id")
+  patient     Patient  @relation(fields: [patientId], references: [id], onDelete: Cascade)
+  doctorId    String   @map("doctor_id")
+  periodStart DateTime @map("period_start")
+  periodEnd   DateTime @map("period_end")
+  sourceHash  String   @map("source_hash")
+  summaryText String   @map("summary_text")
+  engine      String   @default("template")
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  @@map("ai_care_summaries")
+  @@index([patientId, periodStart])
 }
 
 model AuditLog {

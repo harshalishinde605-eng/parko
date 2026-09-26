@@ -324,4 +324,84 @@ const patientCareTeam = asyncHandler(async (req, res) => {
   return ok(res, { caregivers: cgs.map((l) => l.caregiver), doctors: docs.map((l) => l.doctor) });
 });
 
-module.exports = { createPatient, listPatients, getPatient, updatePatient, assignCaregiver, removeCaregiver, createCaregiver, getCaregiver, createExercise, listExercises, updateExercise, assignExercise, patientExercises, logExercise, exerciseHistory, createMedicine, listMedicines, assignMedicine, patientMedicines, logMedicine, medicineHistory, logSymptom, patientSymptoms, addObservation, patientObservations, listAlerts, readAlert, addNote, createReport, listReports, reportPDF, caregiverDashboard, doctorDashboard, patientTimeline, patientInsights, patientChanges, patientSummary, patientCareTeam };
+const doctorDashboardV2 = asyncHandler(async (req, res) => {
+  const { generateSnapshot } = require('../services/snapshotService');
+  const ids = await scopedPatientIds(req.user);
+  const patients = await prisma.patient.findMany({ where: { ...(ids ? { id: { in: ids } } : {}), deletedAt: null }, orderBy: { fullName: 'asc' } });
+  const pids = patients.map((p) => p.id);
+  const byId = Object.fromEntries(patients.map((p) => [p.id, p]));
+
+  // Batched (no N+1): last activity, active plans, recent activity feed.
+  const [exL, medL, symL, obsL, exA, medA] = await Promise.all([
+    prisma.exerciseLog.findMany({ where: { patientId: { in: pids } }, orderBy: { loggedAt: 'desc' }, take: 60, include: { assignment: { include: { exercise: true } } } }),
+    prisma.medicineLog.findMany({ where: { patientId: { in: pids } }, orderBy: { takenAt: 'desc' }, take: 60, include: { assignment: { include: { medicine: true } } } }),
+    prisma.symptomLog.findMany({ where: { patientId: { in: pids } }, orderBy: { loggedAt: 'desc' }, take: 60 }),
+    prisma.caregiverObservation.findMany({ where: { patientId: { in: pids } }, orderBy: { loggedAt: 'desc' }, take: 60 }),
+    prisma.exerciseAssignment.findMany({ where: { patientId: { in: pids }, isActive: true }, select: { patientId: true } }),
+    prisma.medicineAssignment.findMany({ where: { patientId: { in: pids }, isActive: true }, select: { patientId: true } }),
+  ]);
+  const lastActive = {};
+  const touch = (pid, d) => {
+    const t = new Date(d).getTime();
+    if (!lastActive[pid] || t > lastActive[pid]) lastActive[pid] = t;
+  };
+  exL.forEach((l) => touch(l.patientId, l.loggedAt));
+  medL.forEach((l) => touch(l.patientId, l.takenAt));
+  symL.forEach((s) => touch(s.patientId, s.loggedAt));
+  obsL.forEach((o) => touch(o.patientId, o.loggedAt));
+  const activePlanSet = new Set([...exA.map((a) => a.patientId), ...medA.map((a) => a.patientId)]);
+
+  const patientsOut = [];
+  const attentionPatients = [];
+  for (const p of patients) {
+    const ins = await buildInsights(prisma, p.id, 7);
+    const row = {
+      patientId: p.id,
+      name: p.fullName,
+      diagnosisStage: p.diagnosisStage,
+      medicationRate: ins.stats.meds.adherencePct,
+      exerciseRate: ins.stats.exercise.completionPct,
+      checkInRate: Math.round((ins.stats.checkins / 7) * 1000) / 10,
+      walkingDifficultyRecords: ins.stats.walking,
+      tremorRecords: (ins.dayBars?.tremor || []).reduce((a, b) => a + b.count, 0),
+      falls: ins.stats.falls,
+      lastActive: lastActive[p.id] ? new Date(lastActive[p.id]).toISOString() : null,
+      attention: ins.attention.slice(0, 3),
+    };
+    patientsOut.push(row);
+    if (ins.attention.some((a) => a.level === 'red' || a.level === 'amber')) attentionPatients.push(row);
+  }
+
+  const feed = [
+    ...exL.map((l) => ({ at: l.loggedAt, kind: 'exercise', patientId: l.patientId, patientName: byId[l.patientId]?.fullName, title: `${l.assignment?.exercise?.name || 'Exercise'} — ${l.status}`, detail: `Reps ${l.repsDone ?? '–'}`, level: l.status === 'missed' ? 'amber' : 'green' })),
+    ...medL.map((l) => ({ at: l.takenAt, kind: 'medication', patientId: l.patientId, patientName: byId[l.patientId]?.fullName, title: `${l.assignment?.medicine?.name || 'Medicine'} — recorded as ${l.status}`, detail: l.remarks || '', level: l.status === 'missed' ? 'amber' : 'green' })),
+    ...symL.map((s) => ({ at: s.loggedAt, kind: 'symptom', patientId: s.patientId, patientName: byId[s.patientId]?.fullName, title: `${s.type} recorded (${s.severity}/10)`, detail: s.notes || '', level: s.severity >= 8 ? 'red' : 'amber' })),
+    ...obsL.map((o) => ({ at: o.loggedAt, kind: 'observation', patientId: o.patientId, patientName: byId[o.patientId]?.fullName, title: o.falls ? 'Fall recorded — review details' : 'Caregiver observation added', detail: o.notes || '', level: o.falls ? 'red' : 'info' })),
+  ].sort((a, b) => new Date(b.at) - new Date(a.at)).slice(0, 15);
+
+  let snapshot = null;
+  const snapPatient = attentionPatients[0] || patientsOut[0];
+  if (snapPatient) {
+    const s = await generateSnapshot(prisma, { patientId: snapPatient.patientId, doctorId: req.user.id, days: 7 });
+    const p = byId[snapPatient.patientId];
+    snapshot = {
+      patientId: p.id, name: p.fullName,
+      period: s.structured.period,
+      medication: s.structured.medication, exercise: s.structured.exercise,
+      checkins: s.structured.checkIns, falls: s.structured.falls,
+      records: { sessions: s.structured.exercise.completed, walking: s.structured.symptoms.walkingDifficulty, tremor: s.structured.symptoms.tremor },
+      paragraphs: s.paragraphs, engine: s.engine, cached: s.cached, disclaimer: s.disclaimer,
+    };
+  }
+
+  return ok(res, {
+    doctor: { id: req.user.id, name: req.user.fullName },
+    overview: { totalPatients: patients.length, patientsNeedingAttention: attentionPatients.length, activePlans: activePlanSet.size },
+    attentionPatients,
+    patients: patientsOut,
+    snapshot,
+    recentActivity: feed,
+  });
+});
+
+module.exports = { createPatient, listPatients, getPatient, updatePatient, assignCaregiver, removeCaregiver, createCaregiver, getCaregiver, createExercise, listExercises, updateExercise, assignExercise, patientExercises, logExercise, exerciseHistory, createMedicine, listMedicines, assignMedicine, patientMedicines, logMedicine, medicineHistory, logSymptom, patientSymptoms, addObservation, patientObservations, listAlerts, readAlert, addNote, createReport, listReports, reportPDF, caregiverDashboard, doctorDashboard, doctorDashboardV2, patientTimeline, patientInsights, patientChanges, patientSummary, patientCareTeam };

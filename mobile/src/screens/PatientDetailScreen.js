@@ -23,7 +23,8 @@ function ageOf(dob) {
 
 export default function PatientDetailScreen({ route }) {
   const { patientId } = route.params;
-  const [tab, setTab] = useState('ov');
+  const [tab, setTab] = useState(route.params?.tab || 'ov');
+  React.useEffect(() => { if (route.params?.tab) setTab(route.params.tab); }, [route.params?.tab]);
   const [patient, setPatient] = useState(null);
   const [team, setTeam] = useState({ caregivers: [], doctors: [] });
   const [ins, setIns] = useState(null);
