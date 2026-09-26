@@ -108,8 +108,16 @@ const listExercises = asyncHandler(async (req, res) => ok(res, await prisma.exer
 const updateExercise = asyncHandler(async (req, res) => {
   const existing = await prisma.exercise.findUnique({ where: { id: req.params.id } });
   if (!existing) return fail(res, 'Exercise not found', 404);
-  const { name, category, description, videoUrl, defaultSets, defaultReps } = req.body;
-  return ok(res, await prisma.exercise.update({ where: { id: req.params.id }, data: { name, category, description, videoUrl, defaultSets, defaultReps } }));
+  const { name, category, description, videoUrl, defaultSets, defaultReps, startingPosition, bodySide, tempo, demoStatus, monitoringKey } = req.body;
+  return ok(res, await prisma.exercise.update({ where: { id: req.params.id }, data: { name, category, description, videoUrl, defaultSets, defaultReps, startingPosition, bodySide, tempo, demoStatus, monitoringKey } }));
+});
+
+const { resolveDemo } = require('../services/demoService');
+
+const exerciseDemo = asyncHandler(async (req, res) => {
+  const exercise = await prisma.exercise.findUnique({ where: { id: req.params.id } });
+  if (!exercise) return fail(res, 'Exercise not found', 404);
+  return ok(res, { exercise, resolution: resolveDemo(exercise) });
 });
 
 const assignExercise = asyncHandler(async (req, res) => {
@@ -451,4 +459,4 @@ const doctorDashboardV2 = asyncHandler(async (req, res) => {
   });
 });
 
-module.exports = { createPatient, listPatients, getPatient, updatePatient, assignCaregiver, removeCaregiver, createCaregiver, getCaregiver, createExercise, listExercises, updateExercise, assignExercise, patientExercises, logExercise, exerciseHistory, createMedicine, listMedicines, assignMedicine, patientMedicines, logMedicine, medicineHistory, logSymptom, patientSymptoms, addObservation, patientObservations, listAlerts, readAlert, resolveAlert, addNote, createReport, listReports, reportPDF, caregiverDashboard, doctorDashboard, doctorDashboardV2, patientTimeline, patientInsights, patientChanges, patientSummary, patientCareTeam, patientAnalytics };
+module.exports = { createPatient, listPatients, getPatient, updatePatient, assignCaregiver, removeCaregiver, createCaregiver, getCaregiver, createExercise, listExercises, updateExercise, exerciseDemo, assignExercise, patientExercises, logExercise, exerciseHistory, createMedicine, listMedicines, assignMedicine, patientMedicines, logMedicine, medicineHistory, logSymptom, patientSymptoms, addObservation, patientObservations, listAlerts, readAlert, resolveAlert, addNote, createReport, listReports, reportPDF, caregiverDashboard, doctorDashboard, doctorDashboardV2, patientTimeline, patientInsights, patientChanges, patientSummary, patientCareTeam, patientAnalytics };

@@ -164,6 +164,12 @@ model Exercise {
   videoUrl    String?  @map("video_url")
   defaultSets Int?     @map("default_sets")
   defaultReps Int?     @map("default_reps")
+  startingPosition String? @map("starting_position")
+  bodySide         String? @map("body_side")
+  tempo            String? @default("slow")
+  demoStatus       String  @default("UNSUPPORTED") @map("demo_status")
+  demoConfig       Json?   @map("demo_config")
+  monitoringKey    String? @map("monitoring_key")
   createdAt   DateTime @default(now()) @map("created_at")
   updatedAt   DateTime @updatedAt @map("updated_at")
 

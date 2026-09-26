@@ -31,6 +31,7 @@ router.get('/caregivers/:id', authenticate, authorize('DOCTOR', 'ADMIN'), C.getC
 router.post('/exercises', authenticate, authorize('DOCTOR', 'ADMIN'), validate(exerciseSchema), C.createExercise);
 router.get('/exercises', authenticate, C.listExercises);
 router.put('/exercises/:id', authenticate, authorize('DOCTOR', 'ADMIN'), C.updateExercise);
+router.get('/exercises/:id/demo', authenticate, C.exerciseDemo);
 router.post('/exercise-assignments', authenticate, authorize('DOCTOR', 'ADMIN'), validate(exerciseAssignSchema), C.assignExercise);
 router.get('/patients/:id/exercises', authenticate, patientAccess, C.patientExercises);
 router.post('/exercise-logs', authenticate, authorize('CAREGIVER', 'ADMIN'), validate(exerciseLogSchema), C.logExercise);
