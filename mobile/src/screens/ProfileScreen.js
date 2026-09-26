@@ -20,7 +20,7 @@ export default function ProfileScreen() {
           </View>
           <View style={{ flex: 1 }}>
             <Text style={T.h2}>{user?.fullName}</Text>
-            <Text style={T.muted}>{user?.role === 'DOCTOR' ? 'Doctor / Physiotherapist' : user?.role}</Text>
+            <Text style={T.muted}>{user?.role === 'DOCTOR' ? 'Physiotherapist' : user?.role === 'CAREGIVER' ? 'Caregiver' : user?.role}</Text>
           </View>
         </View>
       </Card>

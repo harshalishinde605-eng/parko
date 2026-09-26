@@ -176,6 +176,13 @@ async function buildTimeline(prisma, patientId, daysOrOpts = 7) {
     want('note') ? prisma.doctorNote.findMany({ where: { patientId, createdAt: { gte: from, lte: to } }, orderBy: { createdAt: 'desc' }, take: 50 }) : [],
     want('alert') ? prisma.alert.findMany({ where: { patientId, createdAt: { gte: from, lte: to } }, orderBy: { createdAt: 'desc' }, take: 50 }) : [],
   ]);
+  // Separate try/catch: newer model may be unknown to a stale generated client.
+  let asmts = [];
+  if (want('assessment')) {
+    try {
+      asmts = await prisma.physioAssessment.findMany({ where: { patientId, assessmentDate: { gte: from, lte: to } }, orderBy: { assessmentDate: 'desc' }, take: 50 });
+    } catch { asmts = []; }
+  }
   const src = (role) => SOURCE_LABEL[role] || 'Recorded';
   // Patch occurred_at via raw SQL: readable even when the deployed Prisma
   // Client was generated before the column existed (stale build cache).
@@ -198,6 +205,7 @@ async function buildTimeline(prisma, patientId, daysOrOpts = 7) {
     ...observations.map((o) => ({ id: o.id, patientId, kind: 'observation', source: src(o.loggedBy?.role), sourceRecordId: o.id, at: o.occurredAt || o.loggedAt, title: o.falls ? 'Fall reported' : 'Caregiver observation', detail: o.notes || `Mood ${o.mood || '–'} · Sleep ${o.sleepHours ?? '–'}h`, level: o.falls ? 'red' : 'green' })),
     ...notes.map((n) => ({ id: n.id, patientId, kind: 'note', source: 'Doctor recorded', sourceRecordId: n.id, at: n.createdAt, title: 'Doctor note', detail: n.note, level: 'info' })),
     ...alerts.map((a) => ({ id: a.id, patientId, kind: 'alert', source: 'System', sourceRecordId: a.id, at: a.createdAt, title: a.message, detail: a.type, level: a.severity === 'critical' ? 'red' : a.severity })),
+    ...asmts.map((m) => ({ id: m.id, patientId, kind: 'assessment', source: 'Doctor recorded', sourceRecordId: m.id, at: m.assessmentDate, title: `${m.assessmentType === 'reassessment' ? 'Reassessment' : 'Assessment'} recorded`, detail: [m.tug != null ? `TUG ${m.tug}s` : null, m.walkSpeed != null ? `${m.walkSpeed} m/s` : null, m.sitToStand != null ? `${m.sitToStand} reps` : null].filter(Boolean).join(' · ') || (m.notes || ''), level: 'info' })),
   ].sort((a, b) => new Date(b.at) - new Date(a.at));
   const groups = {};
   for (const it of items) {

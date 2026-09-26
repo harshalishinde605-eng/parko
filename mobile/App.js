@@ -16,6 +16,7 @@ import CaregiverLogScreen from './src/screens/CaregiverLogScreen';
 import AlertsScreen from './src/screens/AlertsScreen';
 import ProfileScreen from './src/screens/ProfileScreen';
 import GuideScreen from './src/screens/GuideScreen';
+import ExerciseLibraryScreen from './src/screens/ExerciseLibraryScreen';
 
 const Stack = createNativeStackNavigator();
 const Tab = createBottomTabNavigator();
@@ -83,6 +84,7 @@ function Root() {
         <>
           <Stack.Screen name="Main" component={DoctorTabs} options={{ headerShown: false }} />
           <Stack.Screen name="PatientDetail" component={PatientDetailScreen} options={({ route }) => ({ title: route.params?.patientName || 'Patient' })} />
+          <Stack.Screen name="ExerciseLibrary" component={ExerciseLibraryScreen} options={{ title: 'Exercise Library' }} />
         </>
       ) : (
         <>

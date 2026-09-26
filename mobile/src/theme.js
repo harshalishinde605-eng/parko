@@ -6,7 +6,7 @@ export const C = {
   primarySoft: '#E3F2EB',
   accent: '#E8A838',
   accentSoft: '#FBF1DC',
-  bg: '#EEF4F1',
+  bg: '#F6F8F4',
   card: '#FFFFFF',
   ink: '#0E211A',
   inkSoft: '#2A4439',

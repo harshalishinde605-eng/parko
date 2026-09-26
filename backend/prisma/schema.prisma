@@ -168,6 +168,8 @@ model Exercise {
   videoUrl    String?  @map("video_url")
   defaultSets Int?     @map("default_sets")
   defaultReps Int?     @map("default_reps")
+  difficulty   String?
+  precautions  String?
   startingPosition String? @map("starting_position")
   bodySide         String? @map("body_side")
   tempo            String? @default("slow")

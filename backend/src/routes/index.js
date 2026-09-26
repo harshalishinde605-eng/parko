@@ -1,6 +1,6 @@
 const express = require('express');
 const { authenticate, authorize, patientAccess } = require('../middleware/auth');
-const { validate, registerSchema, loginSchema, patientSchema, exerciseSchema, exerciseAssignSchema, exerciseLogSchema, medicineSchema, medicineAssignSchema, medicineLogSchema, symptomLogSchema, observationSchema, assessmentSchema, goalSchema, goalUpdateSchema } = require('../validators/schemas');
+const { validate, registerSchema, loginSchema, patientSchema, exerciseSchema, exerciseAssignSchema, assignmentUpdateSchema, exerciseLogSchema, medicineSchema, medicineAssignSchema, medicineLogSchema, symptomLogSchema, observationSchema, assessmentSchema, goalSchema, goalUpdateSchema } = require('../validators/schemas');
 const A = require('../controllers/authController');
 const C = require('../controllers/careController');
 
@@ -33,6 +33,8 @@ router.get('/exercises', authenticate, C.listExercises);
 router.put('/exercises/:id', authenticate, authorize('DOCTOR', 'ADMIN'), C.updateExercise);
 router.get('/exercises/:id/demo', authenticate, C.exerciseDemo);
 router.post('/exercise-assignments', authenticate, authorize('DOCTOR', 'ADMIN'), validate(exerciseAssignSchema), C.assignExercise);
+router.put('/exercise-assignments/:id', authenticate, authorize('DOCTOR', 'ADMIN'), validate(assignmentUpdateSchema), C.updateAssignment);
+router.delete('/exercise-assignments/:id', authenticate, authorize('DOCTOR', 'ADMIN'), C.removeAssignment);
 router.get('/patients/:id/exercises', authenticate, patientAccess, C.patientExercises);
 router.post('/exercise-logs', authenticate, authorize('CAREGIVER', 'ADMIN'), validate(exerciseLogSchema), C.logExercise);
 router.get('/patients/:id/exercise-history', authenticate, patientAccess, C.exerciseHistory);

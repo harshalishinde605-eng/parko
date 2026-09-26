@@ -75,7 +75,7 @@ export default function AlertsScreen({ navigation }) {
 
   return (
     <Screen refreshing={refreshing} onRefresh={() => { setRefreshing(true); load(true); }}>
-      <Title sub="Falls and severe entries first — routine updates last">Alerts</Title>
+      <Title sub="Falls and difficult sessions first — routine updates last">Alerts</Title>
       {!!error && <Banner kind="danger">{error}</Banner>}
       {loading ? <Loader /> : alerts.length === 0 ? (
         <Empty>No items need your review. Falls, severe entries, assignment updates and observations will appear here.</Empty>

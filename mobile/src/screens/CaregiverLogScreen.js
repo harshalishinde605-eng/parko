@@ -55,6 +55,7 @@ export default function CaregiverLogScreen() {
   const [reps, setReps] = useState('');
   const [dur, setDur] = useState('');
   const [diff, setDiff] = useState(3);
+  const [reason, setReason] = useState('');
   const [exR, setExR] = useState('');
 
   const [medA, setMedA] = useState('');
@@ -148,12 +149,14 @@ export default function CaregiverLogScreen() {
           <View style={{ flex: 1 }}><Field label="Reps done" value={reps} onChangeText={setReps} keyboardType="numeric" placeholder="e.g. 10" /></View>
           <View style={{ flex: 1 }}><Field label="Minutes" value={dur} onChangeText={setDur} keyboardType="numeric" placeholder="e.g. 15" /></View>
         </View>
-        <Text style={{ fontSize: 12, fontWeight: '700', color: C.muted, marginBottom: 6 }}>DIFFICULTY (1 EASY – 5 HARD)</Text>
+        <Text style={{ fontSize: 12, fontWeight: '700', color: C.muted, marginBottom: 6 }}>HOW DIFFICULT? {['', 'Easy', 'Comfortable', 'Difficult', 'Very difficult', 'Could not complete'][diff]}</Text>
         <Stepper value={diff} min={1} max={5} onChange={setDiff} hint={diff} />
+        <Text style={{ fontSize: 12, fontWeight: '700', color: C.muted, marginBottom: 6 }}>REASON (IF DIFFICULT)</Text>
+        <Seg options={[{ label: 'None', value: '' }, { label: 'Fatigue', value: 'Fatigue' }, { label: 'Balance', value: 'Balance difficulty' }, { label: 'Pain', value: 'Pain' }, { label: 'Dizziness', value: 'Dizziness' }, { label: 'Freezing', value: 'Freezing' }]} value={reason} onChange={setReason} />
         <Field label="Remarks" value={exR} onChangeText={setExR} placeholder="How did it go?" />
         <Btn title="Save exercise log" loading={busy === 'ex'} onPress={() => {
           if (!exA) return setError('No exercise assignment selected.');
-          return run('ex', () => api.post('/exercise-logs', { assignmentId: exA, patientId: sel, status: exS, repsDone: reps ? +reps : undefined, durationMin: dur ? +dur : undefined, difficulty: diff, remarks: exR || undefined }), 'Exercise log saved.');
+          return run('ex', () => api.post('/exercise-logs', { assignmentId: exA, patientId: sel, status: exS, repsDone: reps ? +reps : undefined, durationMin: dur ? +dur : undefined, difficulty: diff, feedbackReason: reason || undefined, remarks: exR || undefined }), 'Exercise log saved.');
         }} />
       </Card>
 

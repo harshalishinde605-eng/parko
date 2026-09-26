@@ -14,18 +14,11 @@ function greeting() {
   return 'Good evening';
 }
 
-function timeAgo(iso) {
-  if (!iso) return 'No records yet';
-  const mins = Math.floor((Date.now() - new Date(iso).getTime()) / 6e4);
-  if (mins < 1) return 'Just now';
-  if (mins < 60) return `${mins}m ago`;
-  const hrs = Math.floor(mins / 60);
-  if (hrs < 24) return `${hrs}h ago`;
-  const days = Math.floor(hrs / 24);
-  return days === 1 ? 'Yesterday' : `${days}d ago`;
+function statusOf(r) {
+  if (r.assessmentDue) return { label: 'Review due', color: C.warn, bg: C.warnSoft };
+  if ((r.exerciseRate ?? 0) < 50) return { label: 'Needs review', color: C.danger, bg: C.dangerSoft };
+  return { label: 'On Track', color: C.ok, bg: C.okSoft };
 }
-
-const ACT_ICON = { exercise: 'fitness', medication: 'medkit', symptom: 'pulse', observation: 'eye' };
 
 export default function DoctorHomeScreen({ navigation }) {
   const { user } = useAuth();
@@ -78,116 +71,93 @@ export default function DoctorHomeScreen({ navigation }) {
 
   const ov = dash?.overview || {};
   const attention = dash?.attentionPatients || [];
-  const snap = dash?.snapshot || null;
-  const feed = dash?.recentActivity || [];
   const all = dash?.patients || [];
   const q = query.trim().toLowerCase();
   const filtered = q ? all.filter((r) => r.name.toLowerCase().includes(q)) : all;
   const first = (dash?.doctor?.name || user?.fullName || '').replace(/^dr\.?\s+/i, '').split(' ')[0];
 
+  const work = [];
+  for (const r of all.filter((x) => x.assessmentDue).slice(0, 3)) {
+    work.push({ key: `due-${r.patientId}`, icon: 'clipboard', title: r.name, sub: r.lastAssessment ? 'Reassessment due — review assessment' : 'Initial assessment needed', go: () => navigation.navigate('PatientDetail', { patientId: r.patientId, patientName: r.name, tab: 'as' }), btn: 'Review Assessment' });
+  }
+  for (const r of all.filter((x) => !x.assessmentDue && (x.exerciseRate ?? 100) < 50).slice(0, 3)) {
+    work.push({ key: `adh-${r.patientId}`, icon: 'trending-down', title: r.name, sub: `Exercise adherence ${r.exerciseRate}%`, go: () => navigation.navigate('PatientDetail', { patientId: r.patientId, patientName: r.name, tab: 'prog' }), btn: 'View Progress' });
+  }
+  for (const a of attention.filter((x) => (x.attention || []).some((t) => /difficult/i.test(t.title))).slice(0, 2)) {
+    if (work.length >= 5) break;
+    work.push({ key: `dif-${a.patientId}`, icon: 'alert-circle', title: a.name, sub: 'Patient reported increased difficulty', go: () => navigation.navigate('PatientDetail', { patientId: a.patientId, patientName: a.name }), btn: 'Review Patient' });
+  }
+
   return (
     <Screen refreshing={refreshing} onRefresh={() => { setRefreshing(true); load(true); }}>
       <Hero
-        kicker="Doctor dashboard"
+        kicker="Physiotherapy dashboard"
         title={`${greeting()}${first ? `, ${first}` : ''}`}
-        sub="Recorded care across your patients, organized for review."
-        right={<Ionicons name="medkit" size={30} color="rgba(255,255,255,0.9)" />}
+        sub="Let's review your patients' rehabilitation progress."
+        right={<Ionicons name="fitness" size={30} color="rgba(255,255,255,0.9)" />}
       />
       {!!error && <Banner kind="danger">{error}</Banner>}
       <Row>
         <StatTile value={ov.totalPatients ?? 0} label="PATIENTS" />
-        <StatTile value={ov.patientsNeedingAttention ?? 0} label="NEED REVIEW" color={(ov.patientsNeedingAttention || 0) ? C.warn : C.ok} />
+        <StatTile value={ov.activePlans ?? 0} label="ACTIVE PLANS" />
       </Row>
       <Row>
-        <StatTile value={ov.activePlans ?? 0} label="ACTIVE PLANS" />
-        <StatTile value={openAlerts} label="OPEN ALERTS" color={openAlerts ? C.danger : C.ink} />
+        <StatTile value={ov.assessmentsDue ?? 0} label="ASSESSMENTS DUE" color={(ov.assessmentsDue || 0) ? C.warn : C.ink} />
+        <StatTile value={ov.patientsNeedingAttention ?? 0} label="NEED REVIEW" color={(ov.patientsNeedingAttention || 0) ? C.danger : C.ok} />
       </Row>
 
       {loading ? <Loader /> : (
         <>
-          <SectionHead title="Needs your attention" />
-          {attention.length === 0 && <Banner kind="ok">Nothing recorded needs review right now.</Banner>}
-          {attention.slice(0, 5).map((a) => (
-            <TouchableOpacity key={a.patientId} onPress={() => navigation.navigate('PatientDetail', { patientId: a.patientId, patientName: a.name })} activeOpacity={0.85}>
-              <Card>
-                <Row between>
-                  <Text style={T.h2}>{a.name}</Text>
-                  <View style={{ width: 36, height: 36, borderRadius: 18, backgroundColor: C.primarySoft, alignItems: 'center', justifyContent: 'center' }}>
-                    <Ionicons name="chevron-forward" size={20} color={C.primary} />
-                  </View>
-                </Row>
-                {(a.attention || []).slice(0, 3).map((t, i) => (
-                  <Text key={i} style={[T.body, { marginTop: 2 }]}>{t.level === 'red' ? '🔴' : t.level === 'amber' ? '🟠' : '🟢'} {t.title}</Text>
-                ))}
-                <Text style={[T.muted, { marginTop: 6 }]}>💊 Medication records: {a.medicationRate}%   🏃 Exercise: {a.exerciseRate}%{a.falls === 0 ? '   ✓ No falls recorded' : `   ⚠ ${a.falls} fall${a.falls > 1 ? 's' : ''} recorded`}</Text>
-              </Card>
-            </TouchableOpacity>
-          ))}
-
-          {snap && (
-            <>
-              <SectionHead title="Care snapshot" />
-              <Card>
-                <Row between><Text style={T.h2}>🧠 {snap.name}</Text></Row>
-                <Text style={T.muted}>{snap.period?.from} → {snap.period?.to}{snap.cached ? ' · cached' : ''}</Text>
-                <View style={{ marginTop: 8 }}>
-                  <Row between><Text style={T.body}>Medication</Text><Text style={T.h3}>{snap.medication?.rate ?? 0}%</Text></Row>
-                  <Bar pct={snap.medication?.rate ?? 0} color={C.info} />
-                  <Row between><Text style={[T.body, { marginTop: 6 }]}>Exercise</Text><Text style={T.h3}>{snap.exercise?.rate ?? 0}%</Text></Row>
-                  <Bar pct={snap.exercise?.rate ?? 0} />
-                  <Row between><Text style={[T.body, { marginTop: 6 }]}>Check-ins</Text><Text style={T.h3}>{snap.checkins?.completed ?? 0}/{snap.checkins?.expected ?? 7}</Text></Row>
-                  <Text style={[T.body, { marginTop: 6 }]}>Falls: {snap.falls ?? 0} · {snap.records?.sessions ?? 0} sessions · {snap.records?.walking ?? 0} walking records · {snap.records?.tremor ?? 0} tremor records</Text>
-                </View>
-                <Btn title="View full summary" kind="secondary" onPress={() => navigation.navigate('PatientDetail', { patientId: snap.patientId, patientName: snap.name, tab: 'rp' })} />
-              </Card>
-            </>
-          )}
-
-          <SectionHead title="Recent activity" />
-          {feed.length === 0 && <Text style={T.muted}>No patient activity recorded yet.</Text>}
-          {feed.slice(0, 6).map((f, i) => (
-            <Card key={i}>
+          <SectionHead title="Today's physiotherapy work" />
+          {work.length === 0 && <Banner kind="ok">Nothing scheduled — no reassessments due and adherence looks steady.</Banner>}
+          {work.map((w) => (
+            <Card key={w.key}>
               <Row>
-                <Ionicons name={ACT_ICON[f.kind] || 'ellipse'} size={20} color={C.primary} />
+                <View style={{ width: 44, height: 44, borderRadius: 14, backgroundColor: C.primarySoft, alignItems: 'center', justifyContent: 'center' }}>
+                  <Ionicons name={w.icon} size={22} color={C.primary} />
+                </View>
                 <View style={{ flex: 1 }}>
-                  <Text style={[T.tiny, { fontWeight: '700' }]}>{f.patientName} · {timeAgo(f.at)}</Text>
-                  <Text style={[T.body, { fontWeight: '700' }]}>{f.title}</Text>
-                  {!!f.detail && <Text style={T.muted}>{f.detail}</Text>}
+                  <Text style={T.h3}>{w.title}</Text>
+                  <Text style={T.muted}>{w.sub}</Text>
                 </View>
               </Row>
+              <Btn title={w.btn} kind="secondary" onPress={w.go} />
             </Card>
           ))}
 
-          <SectionHead title={`All patients (${all.length})`} />
+          <SectionHead title={`Patients (${all.length})`} />
           <Field placeholder="Search registered patients…" value={query} onChangeText={setQuery} />
           {filtered.length === 0 && <Empty>{all.length ? 'No match for your search.' : 'No patients yet. Register your first patient below.'}</Empty>}
-          {filtered.map((r) => (
-            <TouchableOpacity key={r.patientId} onPress={() => navigation.navigate('PatientDetail', { patientId: r.patientId, patientName: r.name })} activeOpacity={0.85}>
-              <Card>
-                <Row between>
-                  <View style={{ flex: 1 }}>
-                    <Text style={T.h2}>{r.name}</Text>
-                    {!!r.diagnosisStage && <Text style={T.muted}>{r.diagnosisStage}</Text>}
+          {filtered.map((r) => {
+            const st = statusOf(r);
+            return (
+              <TouchableOpacity key={r.patientId} onPress={() => navigation.navigate('PatientDetail', { patientId: r.patientId, patientName: r.name })} activeOpacity={0.85}>
+                <Card>
+                  <Row between>
+                    <View style={{ flex: 1 }}>
+                      <Text style={T.h2}>{r.name}</Text>
+                      <Text style={T.muted}>{r.diagnosisStage || 'Parkinson’s Disease'}</Text>
+                    </View>
+                    <View style={{ borderRadius: 14, paddingHorizontal: 10, paddingVertical: 5, backgroundColor: st.bg }}>
+                      <Text style={{ fontSize: 11, fontWeight: '800', color: st.color }}>{st.label}</Text>
+                    </View>
+                  </Row>
+                  <View style={{ marginTop: 8 }}>
+                    <Text style={T.tiny}>EXERCISE ADHERENCE {r.exerciseRate ?? 0}%</Text>
+                    <Bar pct={r.exerciseRate ?? 0} />
                   </View>
-                  <View style={{ width: 36, height: 36, borderRadius: 18, backgroundColor: C.primarySoft, alignItems: 'center', justifyContent: 'center' }}>
-                    <Ionicons name="chevron-forward" size={20} color={C.primary} />
-                  </View>
-                </Row>
-                <View style={{ marginTop: 8 }}>
-                  <Text style={T.tiny}>MEDICATION {r.medicationRate}% · EXERCISE {r.exerciseRate}%</Text>
-                  <Bar pct={r.medicationRate} color={C.info} />
-                </View>
-                <Text style={[T.tiny, { marginTop: 4 }]}>Last active: {timeAgo(r.lastActive)}</Text>
-              </Card>
-            </TouchableOpacity>
-          ))}
+                  <Text style={[T.tiny, { marginTop: 4 }]}>Last assessment: {r.lastAssessment ? new Date(r.lastAssessment).toLocaleDateString() : 'none yet'}</Text>
+                </Card>
+              </TouchableOpacity>
+            );
+          })}
         </>
       )}
       <Btn title={showAdd ? 'Cancel' : '+ Register patient'} kind={showAdd ? 'secondary' : 'primary'} onPress={() => setShowAdd((s) => !s)} />
       {showAdd && (
         <Card>
           <Field label="Patient full name" placeholder="e.g. Suresh Pawar" value={name} onChangeText={setName} />
-          <Field label="Diagnosis stage" placeholder="e.g. Stage 2" value={stage} onChangeText={setStage} />
+          <Field label="Parkinson's information" placeholder="e.g. Stage 2" value={stage} onChangeText={setStage} />
           <Btn title="Register patient" onPress={create} loading={saving} />
         </Card>
       )}

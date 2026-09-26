@@ -103,7 +103,7 @@ const getCaregiver = asyncHandler(async (req, res) => {
 });
 
 // ---- Exercises ----
-const EXERCISE_WRITABLE = ['name', 'category', 'description', 'videoUrl', 'defaultSets', 'defaultReps', 'startingPosition', 'bodySide', 'tempo', 'demoStatus', 'monitoringKey'];
+const EXERCISE_WRITABLE = ['name', 'category', 'description', 'videoUrl', 'defaultSets', 'defaultReps', 'difficulty', 'precautions', 'startingPosition', 'bodySide', 'tempo', 'demoStatus', 'monitoringKey'];
 function exerciseWriteData(body) {
   let fields = null;
   try { fields = prisma.exercise.fields || null; } catch { fields = null; }
@@ -160,6 +160,43 @@ const patientExercises = asyncHandler(async (req, res) => {
   return ok(res, list);
 });
 
+async function checkAssignmentAccess(req, assignmentId) {
+  const a = await prisma.exerciseAssignment.findUnique({ where: { id: assignmentId } });
+  if (!a) return { error: 'Exercise assignment not found', status: 404 };
+  if (req.user.role !== 'ADMIN') {
+    const allowed = await scopedPatientIds(req.user);
+    if (allowed && !allowed.includes(a.patientId)) return { error: 'Not authorized for this patient', status: 403 };
+  }
+  return { assignment: a };
+}
+
+const updateAssignment = asyncHandler(async (req, res) => {
+  const found = await checkAssignmentAccess(req, req.params.id);
+  if (found.error) return fail(res, found.error, found.status);
+  const { sets, reps, durationMin, frequency, instructions, isActive } = req.body;
+  const a = await prisma.exerciseAssignment.update({
+    where: { id: req.params.id },
+    data: {
+      ...(sets !== undefined ? { sets } : {}),
+      ...(reps !== undefined ? { reps } : {}),
+      ...(durationMin !== undefined ? { durationMin } : {}),
+      ...(frequency !== undefined ? { frequency } : {}),
+      ...(instructions !== undefined ? { instructions } : {}),
+      ...(isActive !== undefined ? { isActive } : {}),
+    },
+  });
+  await audit(req.user.id, 'update_assignment', 'exercise_assignments', a.id, req.ip);
+  return ok(res, a);
+});
+
+const removeAssignment = asyncHandler(async (req, res) => {
+  const found = await checkAssignmentAccess(req, req.params.id);
+  if (found.error) return fail(res, found.error, found.status);
+  const a = await prisma.exerciseAssignment.update({ where: { id: req.params.id }, data: { isActive: false } });
+  await audit(req.user.id, 'remove_assignment', 'exercise_assignments', a.id, req.ip);
+  return ok(res, { message: 'Removed from plan' });
+});
+
 const logExercise = asyncHandler(async (req, res) => {
   const assignment = await prisma.exerciseAssignment.findUnique({ where: { id: req.body.assignmentId } });
   if (!assignment) return fail(res, 'Exercise assignment not found', 404);
@@ -170,6 +207,17 @@ const logExercise = asyncHandler(async (req, res) => {
   const aiData = aiSupported && aiAssisted ? { aiAssisted: true, detectedReps, durationSec, avgConfidence, romSummary, formNotes } : {};
   const log = await prisma.exerciseLog.create({ data: { ...rest, ...aiData, loggedById: req.user.id } });
   await audit(req.user.id, 'log_exercise', 'exercise_logs', log.id, req.ip);
+  // Rehab rule: repeated difficult sessions → one warning alert (deduped weekly).
+  if ((req.body.difficulty || 0) >= 4) {
+    const weekAgo = new Date(Date.now() - 7 * 864e5);
+    const [hard, existing] = await Promise.all([
+      prisma.exerciseLog.count({ where: { patientId: req.body.patientId, difficulty: { gte: 4 }, loggedAt: { gte: weekAgo } } }),
+      prisma.alert.findFirst({ where: { patientId: req.body.patientId, type: 'repeated_difficulty', isRead: false, createdAt: { gte: weekAgo } } }),
+    ]);
+    if (hard >= 3 && !existing) {
+      await prisma.alert.create({ data: { patientId: req.body.patientId, type: 'repeated_difficulty', severity: 'warning', message: 'Repeated exercise difficulty recorded this week' } });
+    }
+  }
   return ok(res, { ...log, aiStored: aiSupported && !!aiAssisted }, 201);
 });
 
@@ -611,4 +659,4 @@ const doctorDashboardV2 = asyncHandler(async (req, res) => {
   });
 });
 
-module.exports = { createPatient, listPatients, getPatient, updatePatient, assignCaregiver, removeCaregiver, createCaregiver, getCaregiver, createExercise, listExercises, updateExercise, exerciseDemo, assignExercise, patientExercises, logExercise, exerciseHistory, createMedicine, listMedicines, assignMedicine, patientMedicines, logMedicine, medicineHistory, logSymptom, patientSymptoms, addObservation, patientObservations, listAlerts, readAlert, resolveAlert, addNote, createReport, listReports, reportPDF, caregiverDashboard, doctorDashboard, doctorDashboardV2, patientTimeline, patientInsights, patientChanges, patientSummary, patientCareTeam, patientAnalytics, createAssessment, listAssessments, compareAssessments, createGoal, listGoals, updateGoal, patientProgress };
+module.exports = { createPatient, listPatients, getPatient, updatePatient, assignCaregiver, removeCaregiver, createCaregiver, getCaregiver, createExercise, listExercises, updateExercise, exerciseDemo, assignExercise, updateAssignment, removeAssignment, patientExercises, logExercise, exerciseHistory, createMedicine, listMedicines, assignMedicine, patientMedicines, logMedicine, medicineHistory, logSymptom, patientSymptoms, addObservation, patientObservations, listAlerts, readAlert, resolveAlert, addNote, createReport, listReports, reportPDF, caregiverDashboard, doctorDashboard, doctorDashboardV2, patientTimeline, patientInsights, patientChanges, patientSummary, patientCareTeam, patientAnalytics, createAssessment, listAssessments, compareAssessments, createGoal, listGoals, updateGoal, patientProgress };
