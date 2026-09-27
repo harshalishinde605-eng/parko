@@ -1,8 +1,8 @@
 import React, { useCallback, useState } from 'react';
 import { View, Text, TouchableOpacity, Switch } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
-import * as SecureStore from 'expo-secure-store';
 import { api, errMsg } from '../../../lib/api';
+import { remindersEnabled, setRemindersEnabled, rescheduleFromPlan } from '../../notify';
 import { useAuth } from '../../auth';
 import { Screen, Card, Btn, Banner, Loader, Row, SectionHead } from '../../ui';
 import { C, T } from '../../theme';
@@ -28,8 +28,8 @@ export default function CgMoreScreen() {
         const tm = await api.get(`/patients/${p.id}/care-team`).catch(() => ({ data: { data: { caregivers: [], doctors: [] } } }));
         setTeam(tm.data.data);
       }
-      const pref = await SecureStore.getItemAsync('cg-reminders').catch(() => null);
-      if (pref !== null) setReminders(pref === '1');
+      const pref = await remindersEnabled();
+      if (pref !== null) setReminders(pref);
     } catch (e) {
       setError(errMsg(e));
     } finally {
@@ -41,7 +41,16 @@ export default function CgMoreScreen() {
 
   const toggleReminders = async (v) => {
     setReminders(v);
-    try { await SecureStore.setItemAsync('cg-reminders', v ? '1' : '0'); } catch { /* ignore */ }
+    await setRemindersEnabled(v);
+    if (v && patient) {
+      try {
+        const [ex, md] = await Promise.all([
+          api.get(`/patients/${patient.id}/exercises`),
+          api.get(`/patients/${patient.id}/medicines`),
+        ]);
+        await rescheduleFromPlan(ex.data.data || [], md.data.data || []);
+      } catch { /* scheduling is best-effort */ }
+    }
   };
 
   return (

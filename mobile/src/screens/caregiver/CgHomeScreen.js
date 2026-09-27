@@ -7,6 +7,7 @@ import { useAuth } from '../../auth';
 import { Screen, Card, Banner, Loader, EmptyState, Chip, Row, AppHeader } from '../../ui';
 import { C, T } from '../../theme';
 import QuickEvent from '../../QuickEvent';
+import { rescheduleFromPlan } from '../../notify';
 
 function greeting() {
   const h = new Date().getHours();
@@ -69,6 +70,7 @@ export default function CgHomeScreen({ navigation }) {
         api.get(`/patients/${id}/observations`).catch(() => ({ data: { data: [] } })),
       ]);
       setTasks({ ex: ex.data.data || [], meds: md.data.data || [] });
+      rescheduleFromPlan(ex.data.data || [], md.data.data || []).catch(() => {});
       setLogs({
         ex: (eh.data.data?.logs || []).filter((l) => isToday(l.loggedAt)),
         med: (mh.data.data?.logs || []).filter((l) => isToday(l.takenAt)),

@@ -6,6 +6,10 @@
     "orientation": "portrait",
     "scheme": "parko-care",
     "icon": "./assets/icon.png",
+    "notification": {
+      "icon": "./assets/icon.png",
+      "color": "#0B6E4F"
+    },
     "splash": {
       "backgroundColor": "#0B6E4F"
     },
