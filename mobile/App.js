@@ -17,6 +17,10 @@ import AlertsScreen from './src/screens/AlertsScreen';
 import ProfileScreen from './src/screens/ProfileScreen';
 import GuideScreen from './src/screens/GuideScreen';
 import ExerciseLibraryScreen from './src/screens/ExerciseLibraryScreen';
+import HomeScreen from './src/screens/HomeScreen';
+import CalendarScreen from './src/screens/CalendarScreen';
+import MoreScreen from './src/screens/MoreScreen';
+import AIDocsScreen from './src/screens/AIDocsScreen';
 
 const Stack = createNativeStackNavigator();
 const Tab = createBottomTabNavigator();
@@ -37,13 +41,15 @@ function DoctorTabs() {
       tabBarStyle: { height: 62, paddingBottom: 8, paddingTop: 6, borderTopColor: C.line },
       tabBarLabelStyle: { fontSize: 11, fontWeight: '700' },
       tabBarIcon: ({ color, size }) => {
-        const icon = route.name === 'Patients' ? 'people' : route.name === 'Alerts' ? 'notifications' : 'person';
+        const icon = route.name === 'Home' ? 'home' : route.name === 'Patients' ? 'people' : route.name === 'Calendar' ? 'calendar' : route.name === 'Alerts' ? 'notifications' : 'menu';
         return <Ionicons name={icon} size={size} color={color} />;
       },
     })}>
+      <Tab.Screen name="Home" component={HomeScreen} />
       <Tab.Screen name="Patients" component={DoctorHomeScreen} />
+      <Tab.Screen name="Calendar" component={CalendarScreen} />
       <Tab.Screen name="Alerts" component={AlertsScreen} />
-      <Tab.Screen name="Profile" component={ProfileScreen} />
+      <Tab.Screen name="More" component={MoreScreen} />
     </Tab.Navigator>
   );
 }
@@ -91,6 +97,8 @@ function Root() {
           <Stack.Screen name="Main" component={DoctorTabs} options={{ headerShown: false }} />
           <Stack.Screen name="PatientDetail" component={PatientDetailScreen} options={({ route }) => ({ title: route.params?.patientName || 'Patient' })} />
           <Stack.Screen name="ExerciseLibrary" component={ExerciseLibraryScreen} options={{ title: 'Exercise Library' }} />
+          <Stack.Screen name="Profile" component={ProfileScreen} options={{ title: 'Profile' }} />
+          <Stack.Screen name="AIDocs" component={AIDocsScreen} options={({ route }) => ({ title: route.params?.patientName ? `AI Docs · ${route.params.patientName}` : 'AI Documentation' })} />
         </>
       ) : (
         <>

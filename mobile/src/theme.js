@@ -8,7 +8,7 @@ export const C = {
   primarySoft: '#E2F1EB',
   accent: '#E8A838',
   accentSoft: '#FBF1DC',
-  bg: '#F5F7F3',
+  bg: '#FAF6EF',
   card: '#FFFFFF',
   cardTint: '#F2F7F3',
   ink: '#10231D',

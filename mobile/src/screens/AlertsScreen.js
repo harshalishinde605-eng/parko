@@ -67,7 +67,7 @@ export default function AlertsScreen({ navigation }) {
           <Btn title="Mark reviewed" kind="secondary" onPress={() => markReviewed(a.id)} />
         )}
         {a.patient && canOpenPatient() && (
-          <Btn title="View event in timeline" kind="ghost" onPress={() => navigation.navigate('PatientDetail', { patientId: a.patient.id, patientName: a.patient.fullName, tab: 'tl' })} />
+          <Btn title="View event in timeline" kind="ghost" onPress={() => navigation.navigate('PatientDetail', { patientId: a.patient.id, patientName: a.patient.fullName, tab: 'notes' })} />
         )}
       </Card>
     </TouchableOpacity>

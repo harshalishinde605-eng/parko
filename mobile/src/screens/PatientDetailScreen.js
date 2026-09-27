@@ -12,9 +12,9 @@ import ProgressTab from './patient/ProgressTab';
 const TABS = [
   { label: 'Overview', value: 'ov' },
   { label: 'Assessment', value: 'as' },
-  { label: 'Rehab Plan', value: 'plan' },
   { label: 'Progress', value: 'prog' },
-  { label: 'Timeline', value: 'tl' },
+  { label: 'Exercise Plan', value: 'plan' },
+  { label: 'Notes', value: 'notes' },
 ];
 
 const KIND_ICON = { exercise: 'fitness', medication: 'medkit', symptom: 'pulse', observation: 'eye', note: 'document-text', alert: 'notifications', assessment: 'clipboard' };
@@ -157,7 +157,7 @@ export default function PatientDetailScreen({ route, navigation }) {
             {(plan.ex.length === 0 && plan.meds.length === 0) && <Text style={T.muted}>No active plan yet.</Text>}
             {plan.ex.slice(0, 3).map((a) => <Text key={a.id} style={[T.body, { marginBottom: 4 }]}>{a.exercise?.name} — {a.sets}×{a.reps}</Text>)}
             {plan.ex.length > 3 && <Text style={T.tiny}>+{plan.ex.length - 3} more…</Text>}
-            <Btn title="View full rehab plan" kind="secondary" onPress={() => setTab('plan')} />
+            <Btn title="View Full Rehab Plan" onPress={() => setTab('plan')} />
           </Card>
 
           <SectionHead title="Recent activity" />
@@ -172,21 +172,6 @@ export default function PatientDetailScreen({ route, navigation }) {
               </Card>
             ));
           })()}
-
-          <SectionHead title="Care & notes" />
-          <Card>
-            <Field label="Link caregiver (email)" placeholder="caregiver@example.com" value={cgEmail} onChangeText={setCgEmail} autoCapitalize="none" keyboardType="email-address" />
-            <Btn title="Link caregiver" kind="secondary" loading={busy === 'cg'} onPress={() => {
-              if (!cgEmail.includes('@')) return setError('Enter a valid caregiver email.');
-              return run('cg', () => api.post(`/patients/${patientId}/caregiver`, { caregiverEmail: cgEmail.trim() }), 'Caregiver linked.');
-            }} />
-            <Field label="Clinical note" placeholder="Write care plan update…" value={note} onChangeText={setNote} multiline />
-            <Btn title="Save note" kind="secondary" loading={busy === 'note'} onPress={() => {
-              if (note.trim().length < 3) return setError('Note is too short.');
-              const text = note.trim(); setNote('');
-              return run('note', () => api.post('/notes', { patientId, note: text }), 'Note saved.');
-            }} />
-          </Card>
         </>
       )}
 
@@ -196,9 +181,18 @@ export default function PatientDetailScreen({ route, navigation }) {
 
       {tab === 'prog' && <ProgressTab patientId={patientId} navigation={navigation} />}
 
-      {tab === 'tl' && (
+      {tab === 'notes' && (
         <>
-          <SectionHead title="Care timeline" />
+          <SectionHead title="Clinical notes" />
+          <Card>
+            <Field label="New clinical note" placeholder="Write care plan update…" value={note} onChangeText={setNote} multiline />
+            <Btn title="Save note" loading={busy === 'note'} onPress={() => {
+              if (note.trim().length < 3) return setError('Note is too short.');
+              const text = note.trim(); setNote('');
+              return run('note', () => api.post('/notes', { patientId, note: text }), 'Note saved.');
+            }} />
+          </Card>
+          <SectionHead title="Session history" />
           <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 8, paddingVertical: 2, paddingRight: 20 }} style={{ marginBottom: 10, marginHorizontal: -20, paddingHorizontal: 20 }}>
             {[{ label: 'All', value: 'all' }, { label: 'Assessment', value: 'assessment' }, { label: 'Exercise', value: 'exercise' }, { label: 'Feedback', value: 'feedback' }, { label: 'Observation', value: 'observation' }, { label: 'Notes', value: 'note' }, { label: 'Alerts', value: 'alert' }].map((f) => (
               <TouchableOpacity key={f.value} onPress={() => setTlFilter(f.value)} style={{ paddingHorizontal: 14, paddingVertical: 8, borderRadius: 18, backgroundColor: tlFilter === f.value ? C.primary : C.white, borderWidth: 1, borderColor: tlFilter === f.value ? C.primary : C.line }}>
@@ -234,6 +228,19 @@ export default function PatientDetailScreen({ route, navigation }) {
               </View>
             ));
           })()}
+          <SectionHead title="Care team" />
+          <Card>
+            <Field label="Link caregiver (email)" placeholder="caregiver@example.com" value={cgEmail} onChangeText={setCgEmail} autoCapitalize="none" keyboardType="email-address" />
+            <Btn title="Link caregiver" kind="secondary" loading={busy === 'cg'} onPress={() => {
+              if (!cgEmail.includes('@')) return setError('Enter a valid caregiver email.');
+              setCgEmail('');
+              return run('cg', () => api.post(`/patients/${patientId}/caregiver`, { caregiverEmail: cgEmail.trim() }), 'Caregiver linked.');
+            }} />
+            {(team.caregivers || []).map((c) => (
+              <Text key={c.id} style={[T.body, { marginTop: 4 }]}>• {c.fullName} ({c.email})</Text>
+            ))}
+            {(team.caregivers || []).length === 0 && <Text style={T.muted}>No caregiver linked yet.</Text>}
+          </Card>
         </>
       )}
     </Screen>
