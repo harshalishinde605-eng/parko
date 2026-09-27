@@ -11,12 +11,14 @@ import RoleSelectScreen from './src/screens/RoleSelectScreen';
 import AuthScreen from './src/screens/AuthScreen';
 import DoctorHomeScreen from './src/screens/DoctorHomeScreen';
 import PatientDetailScreen from './src/screens/PatientDetailScreen';
-import CaregiverHomeScreen from './src/screens/CaregiverHomeScreen';
-import CaregiverLogScreen from './src/screens/CaregiverLogScreen';
+import CgHomeScreen from './src/screens/caregiver/CgHomeScreen';
 import AlertsScreen from './src/screens/AlertsScreen';
 import ProfileScreen from './src/screens/ProfileScreen';
 import GuideScreen from './src/screens/GuideScreen';
 import ExerciseLibraryScreen from './src/screens/ExerciseLibraryScreen';
+import CgCareScreen from './src/screens/caregiver/CgCareScreen';
+import CgReportsScreen from './src/screens/caregiver/CgReportsScreen';
+import CgMoreScreen from './src/screens/caregiver/CgMoreScreen';
 import HomeScreen from './src/screens/HomeScreen';
 import CalendarScreen from './src/screens/CalendarScreen';
 import MoreScreen from './src/screens/MoreScreen';
@@ -64,14 +66,15 @@ function CaregiverTabs() {
       tabBarStyle: { height: 62, paddingBottom: 8, paddingTop: 6, borderTopColor: C.line },
       tabBarLabelStyle: { fontSize: 11, fontWeight: '700' },
       tabBarIcon: ({ color, size }) => {
-        const icon = route.name === 'Today' ? 'sunny' : route.name === 'Log' ? 'create' : route.name === 'Alerts' ? 'notifications' : 'person';
+        const icon = route.name === 'Home' ? 'home' : route.name === 'Care' ? 'heart' : route.name === 'Reports' ? 'bar-chart' : route.name === 'Alerts' ? 'notifications' : 'menu';
         return <Ionicons name={icon} size={size} color={color} />;
       },
     })}>
-      <Tab.Screen name="Today" component={CaregiverHomeScreen} />
-      <Tab.Screen name="Log" component={CaregiverLogScreen} />
+      <Tab.Screen name="Home" component={CgHomeScreen} />
+      <Tab.Screen name="Care" component={CgCareScreen} />
+      <Tab.Screen name="Reports" component={CgReportsScreen} />
       <Tab.Screen name="Alerts" component={AlertsScreen} />
-      <Tab.Screen name="Profile" component={ProfileScreen} />
+      <Tab.Screen name="More" component={CgMoreScreen} />
     </Tab.Navigator>
   );
 }

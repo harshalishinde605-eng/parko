@@ -171,7 +171,7 @@ export default function GuideScreen({ route, navigation }) {
             {done && <Banner kind="ok">Guided session complete — {targetReps} reps done. Now record it with Manual log.</Banner>}
           </Card>
 
-          <Btn title="Log this exercise" onPress={() => navigation.navigate('Log')} />
+          <Btn title="Log this exercise" onPress={() => navigation.navigate('Care')} />
           <Card>
             <Text style={T.tiny}>Guides demonstrate movement only and are not medical advice. Your doctor remains responsible for this exercise prescription.</Text>
           </Card>
