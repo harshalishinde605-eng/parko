@@ -164,7 +164,10 @@ async function listAppointmentsSafe(prisma, where) {
     const conds = [];
     const vals = [];
     let i = 1;
-    if (where.patientId) { conds.push(`patient_id = $${i++}`); vals.push(where.patientId); }
+    if (where.patientId) {
+      if (typeof where.patientId === 'object' && where.patientId.in) { conds.push(`patient_id = ANY($${i++})`); vals.push(where.patientId.in); }
+      else { conds.push(`patient_id = $${i++}`); vals.push(where.patientId); }
+    }
     if (where.doctorId) { conds.push(`doctor_id = $${i++}`); vals.push(where.doctorId); }
     if (where.status) {
       if (typeof where.status === 'string') { conds.push(`status = $${i++}`); vals.push(where.status); }
