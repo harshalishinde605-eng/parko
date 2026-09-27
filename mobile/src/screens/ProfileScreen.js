@@ -1,7 +1,6 @@
 import React, { useState } from 'react';
 import { View, Text } from 'react-native';
 import { useAuth } from '../auth';
-import { BASE_URL } from '../../lib/api';
 import { Screen, Card, Btn, Title } from '../ui';
 import { C, T } from '../theme';
 
@@ -26,8 +25,8 @@ export default function ProfileScreen() {
       </Card>
       <Card>
         <Text style={T.h3}>Connection</Text>
-        <Text style={[T.muted, { marginTop: 4 }]}>{BASE_URL}</Text>
-        <Text style={[T.tiny, { marginTop: 4 }]}>PARKO Care v1.0.0 · data syncs to the secure cloud database</Text>
+        <Text style={[T.muted, { marginTop: 4 }]}>Connected · secure cloud database</Text>
+        <Text style={[T.tiny, { marginTop: 4 }]}>PARKO Care v2.2.0 · your data syncs securely</Text>
       </Card>
       <Btn title="Sign out" kind="danger" loading={busy} onPress={async () => { setBusy(true); await signOut(); setBusy(false); }} />
     </Screen>

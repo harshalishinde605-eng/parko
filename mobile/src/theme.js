@@ -1,23 +1,26 @@
-// PARKO design system v2 — deep clinical modern theme.
+// PARKO design system v3 — clinical reference spec.
+// Deep forest green + emerald actions + mint surfaces + warm off-white bg.
 export const C = {
-  primary: '#0B6E4F',
-  primaryDark: '#084f39',
-  primaryDeep: '#053527',
-  primarySoft: '#E3F2EB',
+  primary: '#063F32',
+  action: '#087A5A',
+  primaryDark: '#063F32',
+  primaryDeep: '#063F32',
+  primarySoft: '#E2F1EB',
   accent: '#E8A838',
   accentSoft: '#FBF1DC',
-  bg: '#F6F8F4',
+  bg: '#F5F7F3',
   card: '#FFFFFF',
-  ink: '#0E211A',
+  cardTint: '#F2F7F3',
+  ink: '#10231D',
   inkSoft: '#2A4439',
-  muted: '#5F7269',
-  line: '#DEE9E3',
-  danger: '#D64545',
+  muted: '#66756F',
+  line: '#E3EAE4',
+  danger: '#C93E3E',
   dangerSoft: '#FDECEC',
   warn: '#B7791F',
   warnSoft: '#FCF3DF',
-  ok: '#1E9E6A',
-  okSoft: '#E6F6EE',
+  ok: '#087A5A',
+  okSoft: '#E2F1EB',
   info: '#2D6CDF',
   infoSoft: '#E8F0FE',
   violet: '#6C4FD8',
@@ -25,27 +28,32 @@ export const C = {
   white: '#fff',
 };
 
-export const R = { sm: 10, md: 16, lg: 24, xl: 30 };
+// Spacing scale: 8 / 12 / 16 / 20 / 24 / 32
+export const S = { xs: 8, sm: 12, md: 16, lg: 20, xl: 24, xxl: 32 };
+export const R = { sm: 10, md: 20, lg: 26, xl: 32 };
 
 export const T = {
   display: { fontSize: 30, fontWeight: '800', color: C.ink, letterSpacing: -0.5 },
   h1: { fontSize: 24, fontWeight: '800', color: C.ink, letterSpacing: -0.3 },
-  h2: { fontSize: 18, fontWeight: '700', color: C.ink },
-  h3: { fontSize: 15, fontWeight: '700', color: C.ink },
-  body: { fontSize: 14, color: C.ink, lineHeight: 20 },
+  h2: { fontSize: 22, fontWeight: '700', color: C.ink },
+  h3: { fontSize: 18, fontWeight: '700', color: C.ink },
+  cardTitle: { fontSize: 17, fontWeight: '700', color: C.ink },
+  body: { fontSize: 15, color: C.ink, lineHeight: 22 },
   muted: { fontSize: 13, color: C.muted, lineHeight: 18 },
-  tiny: { fontSize: 11, color: C.muted },
-  heroTitle: { fontSize: 24, fontWeight: '800', color: C.white, letterSpacing: -0.3 },
-  heroSub: { fontSize: 13, color: 'rgba(255,255,255,0.82)', lineHeight: 18 },
+  tiny: { fontSize: 12, color: C.muted },
+  label: { fontSize: 12, fontWeight: '700', color: C.muted, letterSpacing: 0.5 },
+  heroTitle: { fontSize: 26, fontWeight: '800', color: C.white, letterSpacing: -0.3 },
+  heroSub: { fontSize: 14, color: 'rgba(255,255,255,0.85)', lineHeight: 20 },
+  eyebrow: { fontSize: 11, fontWeight: '800', color: 'rgba(255,255,255,0.75)', letterSpacing: 1.5, textTransform: 'uppercase' },
 };
 
 export const SH = {
   card: {
-    shadowColor: '#0B3D2C',
-    shadowOpacity: 0.08,
-    shadowRadius: 12,
-    shadowOffset: { width: 0, height: 4 },
-    elevation: 3,
+    shadowColor: '#063F32',
+    shadowOpacity: 0.07,
+    shadowRadius: 10,
+    shadowOffset: { width: 0, height: 3 },
+    elevation: 2,
   },
 };
 

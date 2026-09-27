@@ -31,8 +31,11 @@ function DoctorTabs() {
   return (
     <Tab.Navigator screenOptions={({ route }) => ({
       ...screenOpts,
+      headerShown: false,
       tabBarActiveTintColor: C.primary,
-      tabBarInactiveTintColor: '#8AA19A',
+      tabBarInactiveTintColor: C.muted,
+      tabBarStyle: { height: 62, paddingBottom: 8, paddingTop: 6, borderTopColor: C.line },
+      tabBarLabelStyle: { fontSize: 11, fontWeight: '700' },
       tabBarIcon: ({ color, size }) => {
         const icon = route.name === 'Patients' ? 'people' : route.name === 'Alerts' ? 'notifications' : 'person';
         return <Ionicons name={icon} size={size} color={color} />;
@@ -49,8 +52,11 @@ function CaregiverTabs() {
   return (
     <Tab.Navigator screenOptions={({ route }) => ({
       ...screenOpts,
+      headerShown: false,
       tabBarActiveTintColor: C.primary,
-      tabBarInactiveTintColor: '#8AA19A',
+      tabBarInactiveTintColor: C.muted,
+      tabBarStyle: { height: 62, paddingBottom: 8, paddingTop: 6, borderTopColor: C.line },
+      tabBarLabelStyle: { fontSize: 11, fontWeight: '700' },
       tabBarIcon: ({ color, size }) => {
         const icon = route.name === 'Today' ? 'sunny' : route.name === 'Log' ? 'create' : route.name === 'Alerts' ? 'notifications' : 'person';
         return <Ionicons name={icon} size={size} color={color} />;

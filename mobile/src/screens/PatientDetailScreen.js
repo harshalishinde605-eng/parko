@@ -1,9 +1,9 @@
 import React, { useCallback, useState, useEffect } from 'react';
-import { View, Text, TouchableOpacity } from 'react-native';
+import { View, Text, TouchableOpacity, ScrollView } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
 import { api, errMsg } from '../../lib/api';
-import { Screen, Card, Btn, Field, Seg, Title, Banner, Loader, SectionTitle, Chip, Row, Bar, Dots, AttentionItem, Hero, StatTile } from '../ui';
+import { Screen, Card, Btn, Field, Banner, Loader, SectionHead, Chip, Row, Bar, Dots, AttentionItem, StatTile, TabSelector, TimelineItem, EmptyState } from '../ui';
 import { C, T } from '../theme';
 import AssessmentTab from './patient/AssessmentTab';
 import RehabPlanTab from './patient/RehabPlanTab';
@@ -107,19 +107,25 @@ export default function PatientDetailScreen({ route, navigation }) {
 
   return (
     <Screen refreshing={refreshing} onRefresh={() => { setRefreshing(true); load(true); }}>
-      <Hero
-        kicker="Physiotherapy profile"
-        title={patient?.fullName || 'Patient'}
-        sub={[ageOf(patient?.dob), patient?.diagnosisStage || 'Parkinson’s Disease', cg ? `Caregiver: ${cg.fullName}` : 'No caregiver linked'].filter(Boolean).join(' · ')}
-        right={<Ionicons name="person" size={30} color="rgba(255,255,255,0.9)" />}
-      />
+      <Card>
+        <Row between>
+          <View style={{ flex: 1 }}>
+            <Text style={T.cardTitle}>{patient?.fullName || 'Patient'}</Text>
+            <Text style={[T.muted, { marginTop: 2 }]}>{[ageOf(patient?.dob), patient?.diagnosisStage || 'Parkinson’s Disease'].filter(Boolean).join('  •  ')}</Text>
+            <Text style={[T.tiny, { marginTop: 4 }]}>{cg ? `Caregiver: ${cg.fullName}` : 'No caregiver linked'}</Text>
+          </View>
+          <View style={{ width: 52, height: 52, borderRadius: 26, backgroundColor: C.primarySoft, alignItems: 'center', justifyContent: 'center' }}>
+            <Ionicons name="person" size={26} color={C.primary} />
+          </View>
+        </Row>
+      </Card>
       {!!error && <Banner kind="danger">{error}</Banner>}
       {!!okMsg && <Banner kind="ok">{okMsg}</Banner>}
-      <Seg options={TABS} value={tab} onChange={setTab} />
+      <TabSelector options={TABS} value={tab} onChange={setTab} />
 
       {tab === 'ov' && (
         <>
-          <SectionTitle>Primary concerns</SectionTitle>
+          <SectionHead title="Primary concerns" />
           {(latestAsmt?.problems || []).length ? (
             <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6 }}>
               {latestAsmt.problems.map((p, i) => (
@@ -130,7 +136,7 @@ export default function PatientDetailScreen({ route, navigation }) {
             </View>
           ) : <Text style={T.muted}>No recorded assessment yet — capture one in the Assessment tab.</Text>}
 
-          <SectionTitle>Current rehabilitation status</SectionTitle>
+          <SectionHead title="Current rehabilitation status" />
           <Row>
             <StatTile value={`${st?.exercise?.completionPct ?? 0}%`} label="ADHERENCE" />
             <StatTile value={latestAsmt ? fmtDate(latestAsmt.assessmentDate) : '—'} label="LAST ASSESSMENT" />
@@ -140,21 +146,21 @@ export default function PatientDetailScreen({ route, navigation }) {
             <StatTile value={fallsMonth} label="FALLS 30D" color={fallsMonth ? C.danger : C.ink} />
           </Row>
 
-          <SectionTitle>Current goals ({activeGoals.length})</SectionTitle>
+          <SectionHead title={`Current goals (${activeGoals.length})`} />
           {activeGoals.length === 0 && <Text style={T.muted}>No active goals — set them in the Rehab Plan tab.</Text>}
           {activeGoals.slice(0, 3).map((g) => (
             <Card key={g.id}><Text style={T.body}>• {g.title}{g.target ? ` (${g.target})` : ''}</Text></Card>
           ))}
 
-          <SectionTitle>Current plan</SectionTitle>
+          <SectionHead title="Current plan" />
           <Card>
             {(plan.ex.length === 0 && plan.meds.length === 0) && <Text style={T.muted}>No active plan yet.</Text>}
-            {plan.ex.slice(0, 3).map((a) => <Text key={a.id} style={[T.body, { marginBottom: 4 }]}>🏃 {a.exercise?.name} — {a.sets}×{a.reps}</Text>)}
+            {plan.ex.slice(0, 3).map((a) => <Text key={a.id} style={[T.body, { marginBottom: 4 }]}>{a.exercise?.name} — {a.sets}×{a.reps}</Text>)}
             {plan.ex.length > 3 && <Text style={T.tiny}>+{plan.ex.length - 3} more…</Text>}
             <Btn title="View full rehab plan" kind="secondary" onPress={() => setTab('plan')} />
           </Card>
 
-          <SectionTitle>Recent activity</SectionTitle>
+          <SectionHead title="Recent activity" />
           {(() => {
             const flat = Object.entries(timeline.groups || {}).sort((a, b) => (a[0] < b[0] ? 1 : -1)).flatMap(([d, items]) => items.slice(0, 3).map((it) => ({ ...it, day: d }))).slice(0, 3);
             if (!flat.length) return <Text style={T.muted}>No care activity recorded yet.</Text>;
@@ -167,7 +173,7 @@ export default function PatientDetailScreen({ route, navigation }) {
             ));
           })()}
 
-          <SectionTitle>Care & notes</SectionTitle>
+          <SectionHead title="Care & notes" />
           <Card>
             <Field label="Link caregiver (email)" placeholder="caregiver@example.com" value={cgEmail} onChangeText={setCgEmail} autoCapitalize="none" keyboardType="email-address" />
             <Btn title="Link caregiver" kind="secondary" loading={busy === 'cg'} onPress={() => {
@@ -192,40 +198,38 @@ export default function PatientDetailScreen({ route, navigation }) {
 
       {tab === 'tl' && (
         <>
-          <SectionTitle>Care timeline — last 7 days</SectionTitle>
-          <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginBottom: 8 }}>
+          <SectionHead title="Care timeline" />
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 8, paddingVertical: 2, paddingRight: 20 }} style={{ marginBottom: 10, marginHorizontal: -20, paddingHorizontal: 20 }}>
             {[{ label: 'All', value: 'all' }, { label: 'Assessment', value: 'assessment' }, { label: 'Exercise', value: 'exercise' }, { label: 'Feedback', value: 'feedback' }, { label: 'Observation', value: 'observation' }, { label: 'Notes', value: 'note' }, { label: 'Alerts', value: 'alert' }].map((f) => (
-              <TouchableOpacity key={f.value} onPress={() => setTlFilter(f.value)} style={{ paddingHorizontal: 12, paddingVertical: 7, borderRadius: 16, backgroundColor: tlFilter === f.value ? C.primary : C.white, borderWidth: 1, borderColor: tlFilter === f.value ? C.primary : C.line }}>
+              <TouchableOpacity key={f.value} onPress={() => setTlFilter(f.value)} style={{ paddingHorizontal: 14, paddingVertical: 8, borderRadius: 18, backgroundColor: tlFilter === f.value ? C.primary : C.white, borderWidth: 1, borderColor: tlFilter === f.value ? C.primary : C.line }}>
                 <Text style={{ fontSize: 12, fontWeight: '700', color: tlFilter === f.value ? C.white : C.ink }}>{f.label}</Text>
               </TouchableOpacity>
             ))}
-          </View>
+          </ScrollView>
           {(() => {
             const matchKind = (it) => {
               if (tlFilter === 'all') return true;
-              if (tlFilter === 'assessment') return false;
               if (tlFilter === 'feedback') return it.kind === 'exercise';
               return it.kind === tlFilter;
             };
             const entries = Object.entries(timeline.groups || {}).sort((a, b) => (a[0] < b[0] ? 1 : -1))
               .map(([day, items]) => [day, items.filter(matchKind)])
               .filter(([, items]) => items.length);
-            if (!entries.length) return <Banner kind="warn">No care activity recorded yet for this filter.</Banner>;
+            if (!entries.length) return <EmptyState icon="time" title="No activity yet" sub="No care activity recorded yet for this filter." />;
             return entries.map(([day, items]) => (
               <View key={day}>
                 <Text style={[T.h3, { marginTop: 10, marginBottom: 6 }]}>{day}</Text>
                 {items.map((it, i) => (
-                  <Card key={it.id || i}>
-                    <Row>
-                      <Ionicons name={KIND_ICON[it.kind] || 'ellipse'} size={20} color={C.primary} />
-                      <View style={{ flex: 1 }}>
-                        <Text style={[T.tiny, { fontWeight: '700' }]}>{new Date(it.at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })} · {(KIND_LABEL[it.kind] || it.kind).toUpperCase()}</Text>
-                        <Text style={[T.body, { fontWeight: '700' }]}>{it.title}</Text>
-                        {!!it.detail && <Text style={T.muted}>{it.detail}</Text>}
-                        {!!it.source && <Text style={[T.tiny, { marginTop: 2 }]}>👤 {it.source}</Text>}
-                      </View>
-                    </Row>
-                  </Card>
+                  <TimelineItem
+                    key={it.id || i}
+                    last={i === items.length - 1}
+                    time={`${new Date(it.at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`}
+                    title={it.title}
+                    detail={it.detail}
+                    source={it.source}
+                    icon={KIND_ICON[it.kind] || 'ellipse'}
+                    tone={it.level === 'red' ? 'danger' : it.level === 'amber' ? 'warn' : it.level === 'info' ? 'info' : 'ok'}
+                  />
                 ))}
               </View>
             ));

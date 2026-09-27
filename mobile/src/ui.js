@@ -14,7 +14,7 @@ import { Picker } from '@react-native-picker/picker';
 import { Ionicons } from '@expo/vector-icons';
 import { C, R, T, SH, STATUS_STYLE } from './theme';
 
-export function Screen({ children, refreshing, onRefresh, pad = 16 }) {
+export function Screen({ children, refreshing, onRefresh, pad = 20 }) {
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: C.bg }} edges={['top', 'left', 'right']}>
       <ScrollView
@@ -36,11 +36,11 @@ export function Card({ children, style }) {
 
 export function Btn({ title, onPress, kind = 'primary', loading, disabled, style }) {
   const styles = {
-    primary: { bg: C.primary, fg: C.white },
+    primary: { bg: C.action, fg: C.white },
     dark: { bg: C.ink, fg: C.white },
     secondary: { bg: C.primarySoft, fg: C.primaryDark },
     danger: { bg: C.danger, fg: C.white },
-    ghost: { bg: 'transparent', fg: C.primary },
+    ghost: { bg: 'transparent', fg: C.action },
   }[kind];
   const off = disabled || loading;
   return (
@@ -51,7 +51,7 @@ export function Btn({ title, onPress, kind = 'primary', loading, disabled, style
       style={[s.btn, { backgroundColor: styles.bg, opacity: off ? 0.6 : 1 }, kind === 'ghost' && s.btnGhost, style]}
     >
       {loading ? (
-        <ActivityIndicator color={kind === 'primary' || kind === 'danger' || kind === 'dark' ? C.white : C.primary} />
+        <ActivityIndicator color={kind === 'primary' || kind === 'danger' || kind === 'dark' ? C.white : C.action} />
       ) : (
         <Text style={[s.btnT, { color: styles.fg }]}>{title}</Text>
       )}
@@ -269,38 +269,139 @@ export function StatTile({ value, label, color = C.ink, bg = C.card, sub }) {
 
 export function SectionHead({ title, action, onAction }) {
   return (
-    <View style={[s.row, { justifyContent: 'space-between', marginTop: 18, marginBottom: 10 }]}>
-      <Text style={T.h2}>{title}</Text>
+    <View style={[s.row, { justifyContent: 'space-between', marginTop: 20, marginBottom: 10 }]}>
+      <Text style={T.h3}>{title}</Text>
       {!!action && (
         <TouchableOpacity onPress={onAction}>
-          <Text style={{ color: C.primary, fontWeight: '700', fontSize: 13 }}>{action}</Text>
+          <Text style={{ color: C.action, fontWeight: '700', fontSize: 13 }}>{action}</Text>
         </TouchableOpacity>
       )}
     </View>
   );
 }
 
+export function AppHeader({ eyebrow, title, sub, right }) {
+  return (
+    <View style={s.appHeader}>
+      <View style={{ flex: 1 }}>
+        {!!eyebrow && <Text style={T.eyebrow}>{eyebrow}</Text>}
+        <Text style={T.heroTitle}>{title}</Text>
+        {!!sub && <Text style={[T.heroSub, { marginTop: 4 }]}>{sub}</Text>}
+      </View>
+      {!!right && <View style={s.heroRight}>{right}</View>}
+    </View>
+  );
+}
+
+export function StatCard({ value, label, icon, tint }) {
+  return (
+    <View style={[s.stat, SH.card]}>
+      <View style={[s.statIcon, { backgroundColor: tint || C.primarySoft }]}>
+        <Ionicons name={icon || 'stats-chart'} size={20} color={C.primary} />
+      </View>
+      <Text style={s.statValue}>{value}</Text>
+      <Text style={s.statLabel}>{label}</Text>
+    </View>
+  );
+}
+
+export function StatusBadge({ label, tone = 'ok' }) {
+  const map = { ok: [C.okSoft, C.ok], warn: [C.warnSoft, C.warn], danger: [C.dangerSoft, C.danger], info: [C.infoSoft, C.info], neutral: [C.cardTint, C.muted] };
+  const [bg, fg] = map[tone] || map.ok;
+  return (
+    <View style={[s.badge, { backgroundColor: bg }]}>
+      <Text style={[s.badgeT, { color: fg }]}>{label}</Text>
+    </View>
+  );
+}
+
+export function ProgressBar({ pct, color = C.action }) {
+  return (
+    <View style={s.barBg}>
+      <View style={[s.barFg, { width: `${Math.max(0, Math.min(100, pct))}%`, backgroundColor: color }]} />
+    </View>
+  );
+}
+
+export function MetricCard({ label, value, sub, children }) {
+  return (
+    <View style={[s.tile, SH.card]}>
+      <Text style={s.metricValue}>{value}</Text>
+      <Text style={s.metricLabel}>{label}</Text>
+      {!!sub && <Text style={T.tiny}>{sub}</Text>}
+      {children}
+    </View>
+  );
+}
+
+export function TabSelector({ options, value, onChange }) {
+  return (
+    <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={s.tabs} style={{ marginBottom: 12, marginHorizontal: -20, paddingHorizontal: 20 }}>
+      {options.map((o) => (
+        <TouchableOpacity key={String(o.value)} onPress={() => onChange(o.value)} style={[s.tabOpt, value === o.value && s.tabOn]}>
+          <Text style={[s.tabT, value === o.value && s.tabTOn]} numberOfLines={1}>{o.label}</Text>
+        </TouchableOpacity>
+      ))}
+    </ScrollView>
+  );
+}
+
+export function TimelineItem({ time, title, detail, source, icon = 'ellipse', tone = 'ok', last }) {
+  const dot = { ok: C.ok, warn: C.warn, danger: C.danger, info: C.info }[tone] || C.ok;
+  return (
+    <View style={s.tlRow}>
+      <View style={s.tlRail}>
+        <View style={[s.tlDot, { backgroundColor: dot }]} />
+        {!last && <View style={s.tlLine} />}
+      </View>
+      <View style={[s.card, { flex: 1 }]}>
+        <Row>
+          <Ionicons name={icon} size={18} color={C.primary} />
+          <View style={{ flex: 1 }}>
+            <Text style={[T.tiny, { fontWeight: '700' }]}>{time}</Text>
+            <Text style={[T.body, { fontWeight: '700' }]}>{title}</Text>
+            {!!detail && <Text style={T.muted}>{detail}</Text>}
+            {!!source && <Text style={[T.tiny, { marginTop: 2 }]}>{source}</Text>}
+          </View>
+        </Row>
+      </View>
+    </View>
+  );
+}
+
+export function EmptyState({ icon = 'folder-open', title, sub }) {
+  return (
+    <View style={s.empty}>
+      <View style={s.emptyIcon}>
+        <Ionicons name={icon} size={28} color={C.muted} />
+      </View>
+      <Text style={[T.cardTitle, { marginTop: 10, textAlign: 'center' }]}>{title}</Text>
+      {!!sub && <Text style={[T.muted, { textAlign: 'center', marginTop: 4 }]}>{sub}</Text>}
+    </View>
+  );
+}
+
 const s = StyleSheet.create({
-  card: { backgroundColor: C.card, borderRadius: R.md, padding: 14, marginBottom: 12, borderWidth: 1, borderColor: C.line, ...SH.card },
-  btn: { borderRadius: 12, paddingVertical: 13, alignItems: 'center', marginTop: 6 },
-  btnGhost: { borderWidth: 1, borderColor: C.primary },
-  btnT: { fontSize: 15, fontWeight: '700' },
+  card: { backgroundColor: C.card, borderRadius: R.md, padding: 16, marginBottom: 12, borderWidth: 1, borderColor: C.line, ...SH.card },
+  btn: { borderRadius: 14, paddingVertical: 15, alignItems: 'center', marginTop: 8 },
+  btnGhost: { borderWidth: 1.5, borderColor: C.action },
+  btnT: { fontSize: 16, fontWeight: '700' },
   label: { fontSize: 12, fontWeight: '700', color: C.muted, marginBottom: 6, textTransform: 'uppercase', letterSpacing: 0.5 },
   inputWrap: {
-    backgroundColor: C.white, borderWidth: 1, borderColor: C.line, borderRadius: 12,
+    backgroundColor: C.white, borderWidth: 1, borderColor: C.line, borderRadius: 14,
     flexDirection: 'row', alignItems: 'center',
   },
-  input: { flex: 1, paddingHorizontal: 12, paddingVertical: 12, fontSize: 15, color: C.ink },
+  input: { flex: 1, paddingHorizontal: 14, paddingVertical: 14, fontSize: 16, color: C.ink },
   eye: { paddingHorizontal: 12, paddingVertical: 10 },
   err: { color: C.danger, fontSize: 12, marginTop: 4 },
-  seg: { flexDirection: 'row', backgroundColor: '#E7EFEB', borderRadius: 12, padding: 4, marginBottom: 12 },
+  seg: { flexDirection: 'row', backgroundColor: C.primarySoft, borderRadius: 14, padding: 4, marginBottom: 12 },
   segOpt: { flex: 1, paddingVertical: 10, borderRadius: 9, alignItems: 'center' },
   segOn: { backgroundColor: C.white, elevation: 1 },
   segT: { fontSize: 13, fontWeight: '600', color: C.muted },
   segTOn: { color: C.primaryDark },
   chip: { borderRadius: 20, paddingHorizontal: 10, paddingVertical: 4, alignSelf: 'flex-start' },
   chipT: { fontSize: 12, fontWeight: '700' },
-  barBg: { height: 8, backgroundColor: '#E7EFEB', borderRadius: 6, overflow: 'hidden', marginTop: 6 },
+  barBg: { height: 8, backgroundColor: C.primarySoft, borderRadius: 6, overflow: 'hidden', marginTop: 6 },
   barFg: { height: 8, borderRadius: 6 },
   row: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   banner: { borderWidth: 1, borderRadius: 12, padding: 12, marginBottom: 12 },
@@ -312,6 +413,23 @@ const s = StyleSheet.create({
   mbars: { flexDirection: 'row', gap: 6, marginTop: 8 },
   mbarCol: { flex: 1, alignItems: 'center', gap: 4 },
   big: { flexDirection: 'row', alignItems: 'center', gap: 12, backgroundColor: C.primary, borderRadius: 16, padding: 16, marginBottom: 12, ...SH.card },
+  appHeader: { backgroundColor: C.primary, borderRadius: R.lg, padding: 20, marginBottom: 16, flexDirection: 'row', alignItems: 'center', gap: 12, ...SH.card },
+  stat: { flex: 1, backgroundColor: C.card, borderRadius: R.md, padding: 14, borderWidth: 1, borderColor: C.line },
+  statIcon: { width: 36, height: 36, borderRadius: 12, alignItems: 'center', justifyContent: 'center', marginBottom: 8 },
+  statValue: { fontSize: 24, fontWeight: '800', color: C.ink },
+  statLabel: { fontSize: 11, fontWeight: '700', color: C.muted, letterSpacing: 0.4 },
+  badge: { borderRadius: 14, paddingHorizontal: 10, paddingVertical: 5, alignSelf: 'flex-start' },
+  badgeT: { fontSize: 11, fontWeight: '800' },
+  tabs: { gap: 8, paddingVertical: 2 },
+  tabOpt: { paddingHorizontal: 16, paddingVertical: 10, borderRadius: 18, backgroundColor: C.card, borderWidth: 1, borderColor: C.line },
+  tabOn: { backgroundColor: C.primary, borderColor: C.primary },
+  tabT: { fontSize: 13, fontWeight: '700', color: C.muted },
+  tabTOn: { color: C.white },
+  tlRow: { flexDirection: 'row', gap: 10 },
+  tlRail: { width: 14, alignItems: 'center' },
+  tlDot: { width: 12, height: 12, borderRadius: 6, marginTop: 16 },
+  tlLine: { width: 2, flex: 1, backgroundColor: C.line, borderRadius: 2 },
+  emptyIcon: { width: 60, height: 60, borderRadius: 30, backgroundColor: C.cardTint, alignItems: 'center', justifyContent: 'center' },
   hero: { backgroundColor: C.primaryDeep, borderRadius: R.lg, padding: 18, marginBottom: 14, flexDirection: 'row', alignItems: 'center', gap: 12, ...SH.card },
   heroKicker: { color: C.accent, fontSize: 11, fontWeight: '800', letterSpacing: 1.5, textTransform: 'uppercase', marginBottom: 4 },
   heroRight: { width: 56, height: 56, borderRadius: 28, backgroundColor: 'rgba(255,255,255,0.14)', alignItems: 'center', justifyContent: 'center' },

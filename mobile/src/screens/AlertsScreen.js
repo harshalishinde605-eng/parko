@@ -8,8 +8,8 @@ import { T } from '../theme';
 function group(alerts) {
   return {
     review: alerts.filter((a) => !a.isRead && a.severity === 'critical'),
-    attention: alerts.filter((a) => !a.isRead && a.severity !== 'critical'),
-    info: alerts.filter((a) => a.isRead || a.severity === 'info'),
+    attention: alerts.filter((a) => !a.isRead && a.severity === 'warning'),
+    info: alerts.filter((a) => a.isRead || (a.severity !== 'critical' && a.severity !== 'warning')),
   };
 }
 

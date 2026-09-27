@@ -71,7 +71,6 @@ export default function ExerciseLibraryScreen({ navigation, route }) {
 
   return (
     <Screen refreshing={refreshing} onRefresh={() => { setRefreshing(true); load(true); }}>
-      <Text style={T.h1}>Exercise Library</Text>
       <Text style={[T.muted, { marginBottom: 12 }]}>Physiotherapy exercises with demonstration videos and safety notes.</Text>
       {!!error && <Banner kind="danger">{error}</Banner>}
       <Field placeholder="Search exercises…" value={query} onChangeText={setQuery} />

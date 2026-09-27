@@ -4,7 +4,7 @@ import { useFocusEffect } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
 import { api, errMsg } from '../../lib/api';
 import { useAuth } from '../auth';
-import { Screen, Card, Btn, Field, Banner, Loader, Empty, Row, Bar, AttentionItem, Hero, StatTile, SectionHead } from '../ui';
+import { Screen, Card, Btn, Field, Banner, Loader, Row, ProgressBar, StatusBadge, AppHeader, StatCard, SectionHead, EmptyState } from '../ui';
 import { C, T } from '../theme';
 
 function greeting() {
@@ -12,12 +12,6 @@ function greeting() {
   if (h < 12) return 'Good morning';
   if (h < 17) return 'Good afternoon';
   return 'Good evening';
-}
-
-function statusOf(r) {
-  if (r.assessmentDue) return { label: 'Review due', color: C.warn, bg: C.warnSoft };
-  if ((r.exerciseRate ?? 0) < 50) return { label: 'Needs review', color: C.danger, bg: C.dangerSoft };
-  return { label: 'On Track', color: C.ok, bg: C.okSoft };
 }
 
 export default function DoctorHomeScreen({ navigation }) {
@@ -90,20 +84,21 @@ export default function DoctorHomeScreen({ navigation }) {
 
   return (
     <Screen refreshing={refreshing} onRefresh={() => { setRefreshing(true); load(true); }}>
-      <Hero
-        kicker="Physiotherapy dashboard"
-        title={`${greeting()}${first ? `, ${first}` : ''}`}
+      <AppHeader
+        eyebrow="Physiotherapy dashboard"
+        title={`${greeting()}${first ? `,\n${first}` : ''}`}
         sub="Let's review your patients' rehabilitation progress."
-        right={<Ionicons name="fitness" size={30} color="rgba(255,255,255,0.9)" />}
+        right={<Ionicons name="fitness" size={28} color="rgba(255,255,255,0.9)" />}
       />
       {!!error && <Banner kind="danger">{error}</Banner>}
       <Row>
-        <StatTile value={ov.totalPatients ?? 0} label="PATIENTS" />
-        <StatTile value={ov.activePlans ?? 0} label="ACTIVE PLANS" />
+        <View style={{ flex: 1 }}><StatCard value={ov.totalPatients ?? 0} label="PATIENTS" icon="people" /></View>
+        <View style={{ flex: 1 }}><StatCard value={ov.activePlans ?? 0} label="ACTIVE PLANS" icon="clipboard" /></View>
       </Row>
+      <View style={{ height: 10 }} />
       <Row>
-        <StatTile value={ov.assessmentsDue ?? 0} label="ASSESSMENTS DUE" color={(ov.assessmentsDue || 0) ? C.warn : C.ink} />
-        <StatTile value={ov.patientsNeedingAttention ?? 0} label="NEED REVIEW" color={(ov.patientsNeedingAttention || 0) ? C.danger : C.ok} />
+        <View style={{ flex: 1 }}><StatCard value={ov.assessmentsDue ?? 0} label="ASSESSMENTS DUE" icon="time" /></View>
+        <View style={{ flex: 1 }}><StatCard value={ov.patientsNeedingAttention ?? 0} label="NEED REVIEW" icon="alert-circle" /></View>
       </Row>
 
       {loading ? <Loader /> : (
@@ -113,11 +108,11 @@ export default function DoctorHomeScreen({ navigation }) {
           {work.map((w) => (
             <Card key={w.key}>
               <Row>
-                <View style={{ width: 44, height: 44, borderRadius: 14, backgroundColor: C.primarySoft, alignItems: 'center', justifyContent: 'center' }}>
+                <View style={{ width: 46, height: 46, borderRadius: 15, backgroundColor: C.primarySoft, alignItems: 'center', justifyContent: 'center' }}>
                   <Ionicons name={w.icon} size={22} color={C.primary} />
                 </View>
                 <View style={{ flex: 1 }}>
-                  <Text style={T.h3}>{w.title}</Text>
+                  <Text style={T.cardTitle}>{w.title}</Text>
                   <Text style={T.muted}>{w.sub}</Text>
                 </View>
               </Row>
@@ -126,38 +121,37 @@ export default function DoctorHomeScreen({ navigation }) {
           ))}
 
           <SectionHead title={`Patients (${all.length})`} />
-          <Field placeholder="Search registered patients…" value={query} onChangeText={setQuery} />
-          {filtered.length === 0 && <Empty>{all.length ? 'No match for your search.' : 'No patients yet. Register your first patient below.'}</Empty>}
+          <Field placeholder="Search patients..." value={query} onChangeText={setQuery} />
+          {filtered.length === 0 && <EmptyState icon="people" title={all.length ? 'No match found' : 'No patients yet'} sub={all.length ? 'Try a different search.' : 'Register your first patient below.'} />}
           {filtered.map((r) => {
-            const st = statusOf(r);
+            const badge = r.assessmentDue
+              ? { label: 'Review due', tone: 'warn' }
+              : (r.exerciseRate ?? 0) < 50 ? { label: 'Needs review', tone: 'danger' } : { label: 'Active', tone: 'ok' };
             return (
               <TouchableOpacity key={r.patientId} onPress={() => navigation.navigate('PatientDetail', { patientId: r.patientId, patientName: r.name })} activeOpacity={0.85}>
                 <Card>
                   <Row between>
-                    <View style={{ flex: 1 }}>
-                      <Text style={T.h2}>{r.name}</Text>
-                      <Text style={T.muted}>{r.diagnosisStage || 'Parkinson’s Disease'}</Text>
-                    </View>
-                    <View style={{ borderRadius: 14, paddingHorizontal: 10, paddingVertical: 5, backgroundColor: st.bg }}>
-                      <Text style={{ fontSize: 11, fontWeight: '800', color: st.color }}>{st.label}</Text>
-                    </View>
+                    <Text style={T.cardTitle}>{r.name}</Text>
+                    <StatusBadge label={badge.label} tone={badge.tone} />
                   </Row>
-                  <View style={{ marginTop: 8 }}>
-                    <Text style={T.tiny}>EXERCISE ADHERENCE {r.exerciseRate ?? 0}%</Text>
-                    <Bar pct={r.exerciseRate ?? 0} />
-                  </View>
-                  <Text style={[T.tiny, { marginTop: 4 }]}>Last assessment: {r.lastAssessment ? new Date(r.lastAssessment).toLocaleDateString() : 'none yet'}</Text>
+                  {!!r.diagnosisStage && <Text style={[T.muted, { marginTop: 2 }]}>{r.diagnosisStage}</Text>}
+                  <Text style={[T.label, { marginTop: 10 }]}>EXERCISE ADHERENCE</Text>
+                  <Row>
+                    <View style={{ flex: 1 }}><ProgressBar pct={r.exerciseRate ?? 0} /></View>
+                    <Text style={[T.cardTitle, { minWidth: 52, textAlign: 'right' }]}>{r.exerciseRate ?? 0}%</Text>
+                  </Row>
+                  <Text style={[T.tiny, { marginTop: 6 }]}>Last assessment: {r.lastAssessment ? new Date(r.lastAssessment).toLocaleDateString() : 'none yet'}</Text>
                 </Card>
               </TouchableOpacity>
             );
           })}
         </>
       )}
-      <Btn title={showAdd ? 'Cancel' : '+ Register patient'} kind={showAdd ? 'secondary' : 'primary'} onPress={() => setShowAdd((s) => !s)} />
+      <Btn title={showAdd ? 'Cancel' : '+ Register Patient'} kind={showAdd ? 'secondary' : 'primary'} onPress={() => setShowAdd((s) => !s)} />
       {showAdd && (
         <Card>
-          <Field label="Patient full name" placeholder="e.g. Suresh Pawar" value={name} onChangeText={setName} />
-          <Field label="Parkinson's information" placeholder="e.g. Stage 2" value={stage} onChangeText={setStage} />
+          <Field label="Patient full name" placeholder="e.g. Ramesh Sharma" value={name} onChangeText={setName} />
+          <Field label="Parkinson's stage" placeholder="e.g. Stage 2" value={stage} onChangeText={setStage} />
           <Btn title="Register patient" onPress={create} loading={saving} />
         </Card>
       )}
