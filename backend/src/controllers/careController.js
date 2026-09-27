@@ -518,6 +518,81 @@ const updateGoal = asyncHandler(async (req, res) => {
   return ok(res, g);
 });
 
+// ---- Appointments ----
+const createAppointment = asyncHandler(async (req, res) => {
+  const { patientId, title, scheduledAt, status, notes } = req.body;
+  if (req.user.role !== 'ADMIN') {
+    const allowed = await scopedPatientIds(req.user);
+    if (allowed && !allowed.includes(patientId)) return fail(res, 'Not authorized for this patient', 403);
+  }
+  const patient = await prisma.patient.findFirst({ where: { id: patientId, deletedAt: null } });
+  if (!patient) return fail(res, 'Patient not found', 404);
+  const { createAppointmentSafe } = require('../utils/modelSafe');
+  const a = await createAppointmentSafe(prisma, {
+    patientId, doctorId: req.user.id, title, scheduledAt: new Date(scheduledAt), status, notes,
+  });
+  await audit(req.user.id, 'create_appointment', 'appointments', a.id, req.ip);
+  return ok(res, a, 201);
+});
+
+const listAppointments = asyncHandler(async (req, res) => {
+  const { patientId, from, to, upcoming } = req.query;
+  const { listAppointmentsSafe } = require('../utils/modelSafe');
+  let ids = await scopedPatientIds(req.user);
+  const where = {};
+  if (patientId) {
+    if (ids && !ids.includes(patientId)) return fail(res, 'Not authorized for this patient', 403);
+    where.patientId = patientId;
+  } else if (ids) {
+    if (!ids.length) return ok(res, []);
+    where.patientId = { in: ids };
+  }
+  if (req.user.role === 'DOCTOR') where.doctorId = req.user.id;
+  if (upcoming === 'true') where.scheduledAt = { gte: new Date() };
+  else {
+    if (from) where.scheduledAt = { ...(where.scheduledAt || {}), gte: new Date(from) };
+    if (to) where.scheduledAt = { ...(where.scheduledAt || {}), lte: new Date(to) };
+  }
+  let list = await listAppointmentsSafe(prisma, where);
+  // listAppointmentsSafe raw path ignores `in` filters — apply in JS as fallback.
+  if (where.patientId && typeof where.patientId === 'object' && where.patientId.in) {
+    list = list.filter((a) => where.patientId.in.includes(a.patientId));
+  }
+  if (req.user.role === 'CAREGIVER') {
+    const cgIds = await prisma.patientCaregiver.findMany({ where: { caregiverId: req.user.id } });
+    const mine = new Set(cgIds.map((l) => l.patientId));
+    list = list.filter((a) => mine.has(a.patientId));
+  }
+  const names = {};
+  for (const a of list) {
+    if (!names[a.patientId]) {
+      const p = await prisma.patient.findUnique({ where: { id: a.patientId }, select: { id: true, fullName: true } });
+      if (p) names[a.patientId] = p.fullName;
+    }
+  }
+  return ok(res, list.map((a) => ({ ...a, patientName: names[a.patientId] || '' })));
+});
+
+const updateAppointment = asyncHandler(async (req, res) => {
+  const { findAppointmentSafe, updateAppointmentSafe } = require('../utils/modelSafe');
+  const existing = await findAppointmentSafe(prisma, req.params.id);
+  if (!existing) return fail(res, 'Appointment not found', 404);
+  if (req.user.role !== 'ADMIN') {
+    const allowed = await scopedPatientIds(req.user);
+    if (allowed && !allowed.includes(existing.patientId)) return fail(res, 'Not authorized for this patient', 403);
+    if (req.user.role === 'DOCTOR' && existing.doctorId !== req.user.id) return fail(res, 'Not your appointment', 403);
+  }
+  const { title, scheduledAt, status, notes } = req.body;
+  const a = await updateAppointmentSafe(prisma, req.params.id, {
+    ...(title !== undefined ? { title } : {}),
+    ...(scheduledAt !== undefined ? { scheduledAt: new Date(scheduledAt) } : {}),
+    ...(status !== undefined ? { status } : {}),
+    ...(notes !== undefined ? { notes } : {}),
+  });
+  await audit(req.user.id, 'update_appointment', 'appointments', a.id, req.ip);
+  return ok(res, a);
+});
+
 // ---- Rehab progress (adherence weeks + latest assessment pair + feedback) ----
 const patientProgress = asyncHandler(async (req, res) => {
   const { exerciseCompletion } = require('../utils/calculations');
@@ -621,6 +696,23 @@ const doctorDashboardV2 = asyncHandler(async (req, res) => {
   symL.forEach((s) => touch(s.patientId, s.loggedAt));
   obsL.forEach((o) => touch(o.patientId, o.loggedAt));
   const activePlanSet = new Set([...exA.map((a) => a.patientId), ...medA.map((a) => a.patientId)]);
+  // Today's + upcoming appointments (safe helper: works on stale clients too).
+  const { listAppointmentsSafe } = require('../utils/modelSafe');
+  const dayStart = new Date();
+  dayStart.setHours(0, 0, 0, 0);
+  const dayEnd = new Date(dayStart.getTime() + 864e5);
+  let todaysAppointments = [];
+  try {
+    const allAppts = await listAppointmentsSafe(prisma, { status: 'scheduled' });
+    const mine = pids.length ? allAppts.filter((a) => pids.includes(a.patientId)) : allAppts;
+    if (req.user.role === 'DOCTOR') {
+      const own = mine.filter((a) => !a.doctorId || a.doctorId === req.user.id);
+      todaysAppointments = own.filter((a) => { const t = new Date(a.scheduledAt).getTime(); return t >= dayStart.getTime() && t < dayEnd.getTime(); });
+    } else {
+      todaysAppointments = mine.filter((a) => { const t = new Date(a.scheduledAt).getTime(); return t >= dayStart.getTime() && t < dayEnd.getTime(); });
+    }
+    todaysAppointments.sort((a, b) => new Date(a.scheduledAt) - new Date(b.scheduledAt));
+  } catch { todaysAppointments = []; }
 
   const patientsOut = [];
   const attentionPatients = [];
@@ -685,13 +777,14 @@ const doctorDashboardV2 = asyncHandler(async (req, res) => {
 
   return ok(res, {
     doctor: { id: req.user.id, name: req.user.fullName },
-    overview: { totalPatients: patients.length, patientsNeedingAttention: attentionPatients.length, activePlans: activePlanSet.size, assessmentsDue: patients.filter((p) => isDue(p.id)).length },
+    overview: { totalPatients: patients.length, patientsNeedingAttention: attentionPatients.length, activePlans: activePlanSet.size, assessmentsDue: patients.filter((p) => isDue(p.id)).length, appointmentsToday: todaysAppointments.length },
     attentionPatients,
     patients: patientsOut,
     snapshot,
     snapshotError,
     recentActivity: feed,
+    todaysAppointments: todaysAppointments.map((a) => ({ ...a, patientName: byId[a.patientId]?.fullName || '' })),
   });
 });
 
-module.exports = { createPatient, listPatients, getPatient, updatePatient, assignCaregiver, removeCaregiver, createCaregiver, getCaregiver, createExercise, listExercises, updateExercise, exerciseDemo, assignExercise, updateAssignment, removeAssignment, patientExercises, logExercise, exerciseHistory, createMedicine, listMedicines, assignMedicine, patientMedicines, logMedicine, medicineHistory, logSymptom, patientSymptoms, addObservation, patientObservations, listAlerts, readAlert, resolveAlert, addNote, createReport, listReports, reportPDF, caregiverDashboard, doctorDashboard, doctorDashboardV2, patientTimeline, patientInsights, patientChanges, patientSummary, patientCareTeam, patientAnalytics, createAssessment, listAssessments, compareAssessments, createGoal, listGoals, updateGoal, patientProgress };
+module.exports = { createPatient, listPatients, getPatient, updatePatient, assignCaregiver, removeCaregiver, createCaregiver, getCaregiver, createExercise, listExercises, updateExercise, exerciseDemo, assignExercise, updateAssignment, removeAssignment, patientExercises, logExercise, exerciseHistory, createMedicine, listMedicines, assignMedicine, patientMedicines, logMedicine, medicineHistory, logSymptom, patientSymptoms, addObservation, patientObservations, listAlerts, readAlert, resolveAlert, addNote, createReport, listReports, reportPDF, caregiverDashboard, doctorDashboard, doctorDashboardV2, patientTimeline, patientInsights, patientChanges, patientSummary, patientCareTeam, patientAnalytics, createAssessment, listAssessments, compareAssessments, createGoal, listGoals, updateGoal, patientProgress, createAppointment, listAppointments, updateAppointment };

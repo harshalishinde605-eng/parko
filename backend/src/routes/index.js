@@ -1,6 +1,6 @@
 const express = require('express');
 const { authenticate, authorize, patientAccess } = require('../middleware/auth');
-const { validate, registerSchema, loginSchema, patientSchema, exerciseSchema, exerciseAssignSchema, assignmentUpdateSchema, exerciseLogSchema, medicineSchema, medicineAssignSchema, medicineLogSchema, symptomLogSchema, observationSchema, assessmentSchema, goalSchema, goalUpdateSchema } = require('../validators/schemas');
+const { validate, registerSchema, loginSchema, patientSchema, exerciseSchema, exerciseAssignSchema, assignmentUpdateSchema, exerciseLogSchema, medicineSchema, medicineAssignSchema, medicineLogSchema, symptomLogSchema, observationSchema, assessmentSchema, goalSchema, goalUpdateSchema, appointmentSchema, appointmentUpdateSchema } = require('../validators/schemas');
 const A = require('../controllers/authController');
 const C = require('../controllers/careController');
 
@@ -70,6 +70,11 @@ router.post('/patients/:id/goals', authenticate, authorize('DOCTOR', 'ADMIN'), p
 router.get('/patients/:id/goals', authenticate, patientAccess, C.listGoals);
 router.put('/goals/:id', authenticate, authorize('DOCTOR', 'ADMIN'), validate(goalUpdateSchema), C.updateGoal);
 router.get('/patients/:id/progress', authenticate, patientAccess, C.patientProgress);
+
+// Appointments
+router.post('/appointments', authenticate, authorize('DOCTOR', 'ADMIN'), validate(appointmentSchema), C.createAppointment);
+router.get('/appointments', authenticate, C.listAppointments);
+router.put('/appointments/:id', authenticate, authorize('DOCTOR', 'ADMIN'), validate(appointmentUpdateSchema), C.updateAppointment);
 
 // Notes, alerts, reports, dashboards
 router.post('/notes', authenticate, authorize('DOCTOR', 'ADMIN'), C.addNote);

@@ -32,8 +32,7 @@ function mapAssessmentSafe(r) {
   };
 }
 
-function mapGoal(r) {
-  if (!r) return null;
+function mapGoal(r) {  if (!r) return null;
   return {
     id: r.id, patientId: r.patientId || r.patient_id, therapistId: r.therapistId || r.therapist_id,
     title: r.title, description: r.description || null, status: r.status,
@@ -131,4 +130,86 @@ async function findGoalSafe(prisma, id) {
   }
 }
 
-module.exports = { createAssessmentSafe, listAssessmentsSafe, createGoalSafe, listGoalsSafe, updateGoalSafe, findGoalSafe, numOrNull };
+function mapAppointment(r) {
+  if (!r) return null;
+  return {
+    id: r.id, patientId: r.patientId || r.patient_id, doctorId: r.doctorId || r.doctor_id,
+    title: r.title, scheduledAt: r.scheduledAt || r.scheduled_at, status: r.status,
+    notes: r.notes || null, createdAt: r.createdAt || r.created_at, updatedAt: r.updatedAt || r.updated_at,
+  };
+}
+
+async function createAppointmentSafe(prisma, data) {
+  try {
+    if (!prisma.appointment) throw new TypeError('no model');
+    return await prisma.appointment.create({ data });
+  } catch (e) {
+    if (!isStaleClientError(e)) throw e;
+    const id = `tmp_${Date.now().toString(36)}${Math.floor(Math.random() * 1e6)}`;
+    await prisma.$executeRawUnsafe(
+      'INSERT INTO appointments (id, patient_id, doctor_id, title, scheduled_at, status, notes, created_at, updated_at) VALUES ($1,$2,$3,$4,$5,$6,$7,NOW(),NOW())',
+      id, data.patientId, data.doctorId, data.title || 'Follow-up', data.scheduledAt, data.status || 'scheduled', data.notes || null
+    );
+    const rows = await prisma.$queryRawUnsafe('SELECT * FROM appointments WHERE id = $1', id);
+    return mapAppointment(rows[0]);
+  }
+}
+
+async function listAppointmentsSafe(prisma, where) {
+  try {
+    if (!prisma.appointment) throw new TypeError('no model');
+    return await prisma.appointment.findMany({ where, orderBy: { scheduledAt: 'asc' } });
+  } catch (e) {
+    if (!isStaleClientError(e)) throw e;
+    const conds = [];
+    const vals = [];
+    let i = 1;
+    if (where.patientId) { conds.push(`patient_id = $${i++}`); vals.push(where.patientId); }
+    if (where.doctorId) { conds.push(`doctor_id = $${i++}`); vals.push(where.doctorId); }
+    if (where.status) {
+      if (typeof where.status === 'string') { conds.push(`status = $${i++}`); vals.push(where.status); }
+      else if (where.status.in) { conds.push(`status = ANY($${i++})`); vals.push(where.status.in); }
+    }
+    if (where.scheduledAt?.gte) { conds.push(`scheduled_at >= $${i++}`); vals.push(where.scheduledAt.gte); }
+    if (where.scheduledAt?.lte) { conds.push(`scheduled_at <= $${i++}`); vals.push(where.scheduledAt.lte); }
+    const rows = await prisma.$queryRawUnsafe(
+      `SELECT * FROM appointments${conds.length ? ' WHERE ' + conds.join(' AND ') : ''} ORDER BY scheduled_at ASC`, ...vals
+    );
+    return rows.map(mapAppointment);
+  }
+}
+
+async function updateAppointmentSafe(prisma, id, data) {
+  try {
+    if (!prisma.appointment) throw new TypeError('no model');
+    return await prisma.appointment.update({ where: { id }, data });
+  } catch (e) {
+    if (!isStaleClientError(e)) throw e;
+    const sets = [];
+    const vals = [];
+    let i = 1;
+    const col = { title: 'title', scheduledAt: 'scheduled_at', status: 'status', notes: 'notes' };
+    for (const [k, c] of Object.entries(col)) {
+      if (data[k] !== undefined) { sets.push(`${c} = $${i++}`); vals.push(data[k]); }
+    }
+    sets.push('updated_at = NOW()');
+    vals.push(id);
+    await prisma.$executeRawUnsafe(`UPDATE appointments SET ${sets.join(', ')} WHERE id = $${i}`, ...vals);
+    const rows = await prisma.$queryRawUnsafe('SELECT * FROM appointments WHERE id = $1', id);
+    if (!rows[0]) { const err = new Error('Appointment not found'); err.status = 404; throw err; }
+    return mapAppointment(rows[0]);
+  }
+}
+
+async function findAppointmentSafe(prisma, id) {
+  try {
+    if (!prisma.appointment) throw new TypeError('no model');
+    return await prisma.appointment.findUnique({ where: { id } });
+  } catch (e) {
+    if (!isStaleClientError(e)) throw e;
+    const rows = await prisma.$queryRawUnsafe('SELECT * FROM appointments WHERE id = $1', id);
+    return mapAppointment(rows[0] || null);
+  }
+}
+
+module.exports = { createAssessmentSafe, listAssessmentsSafe, createGoalSafe, listGoalsSafe, updateGoalSafe, findGoalSafe, numOrNull, createAppointmentSafe, listAppointmentsSafe, updateAppointmentSafe, findAppointmentSafe };

@@ -71,6 +71,7 @@ model User {
   reports           Report[]             @relation("GeneratedBy")
   assessments       PhysioAssessment[]   @relation("TherapistAssessments")
   goals             RehabGoal[]          @relation("TherapistGoals")
+  appointments      Appointment[]        @relation("DoctorAppointments")
   auditLogs         AuditLog[]
   patientLinksAsCaregiver PatientCaregiver[]
   patientLinksAsDoctor    PatientDoctor[]
@@ -129,6 +130,7 @@ model Patient {
   aiSummaries  AiCareSummary[]
   assessments  PhysioAssessment[]
   goals        RehabGoal[]
+  appointments Appointment[]
 
   @@map("patients")
   @@index([fullName])
@@ -427,6 +429,24 @@ model AiCareSummary {
 
   @@map("ai_care_summaries")
   @@index([patientId, periodStart])
+}
+
+model Appointment {
+  id          String    @id @default(cuid())
+  patientId   String    @map("patient_id")
+  patient     Patient   @relation(fields: [patientId], references: [id], onDelete: Cascade)
+  doctorId    String    @map("doctor_id")
+  doctor      User      @relation("DoctorAppointments", fields: [doctorId], references: [id])
+  title       String    @default("Follow-up")
+  scheduledAt DateTime  @map("scheduled_at")
+  status      String    @default("scheduled")
+  notes       String?
+  createdAt   DateTime  @default(now()) @map("created_at")
+  updatedAt   DateTime  @updatedAt @map("updated_at")
+
+  @@map("appointments")
+  @@index([doctorId, scheduledAt])
+  @@index([patientId, scheduledAt])
 }
 
 model AuditLog {

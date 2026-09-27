@@ -17,6 +17,8 @@ const observationSchema = z.object({ patientId: z.string(), mood: z.string().opt
 const assessmentSchema = z.object({ assessmentType: z.enum(['initial', 'reassessment']).default('initial'), assessmentDate: z.string().optional(), tug: z.number().positive().optional(), walkSpeed: z.number().positive().optional(), sitToStand: z.number().int().min(0).optional(), balanceScore: z.number().int().min(0).optional(), balanceMax: z.number().int().positive().optional(), problems: z.array(z.string().max(40)).max(20).default([]), observations: z.string().max(2000).optional(), notes: z.string().max(2000).optional(), reviewDate: z.string().optional() });
 const goalSchema = z.object({ title: z.string().min(2).max(120), description: z.string().max(1000).optional(), status: z.enum(['active', 'achieved', 'paused']).default('active'), target: z.string().max(200).optional(), reviewDate: z.string().optional() });
 const goalUpdateSchema = z.object({ title: z.string().min(2).max(120).optional(), description: z.string().max(1000).optional(), status: z.enum(['active', 'achieved', 'paused']).optional(), target: z.string().max(200).optional(), reviewDate: z.string().optional() });
+const appointmentSchema = z.object({ patientId: z.string(), title: z.string().min(2).max(120).default('Follow-up'), scheduledAt: z.string(), status: z.enum(['scheduled', 'completed', 'cancelled']).default('scheduled'), notes: z.string().max(1000).optional() });
+const appointmentUpdateSchema = z.object({ title: z.string().min(2).max(120).optional(), scheduledAt: z.string().optional(), status: z.enum(['scheduled', 'completed', 'cancelled']).optional(), notes: z.string().max(1000).optional() });
 
 const validate = (schema) => (req, res, next) => {
   const parsed = schema.safeParse(req.body);
@@ -25,4 +27,4 @@ const validate = (schema) => (req, res, next) => {
   next();
 };
 
-module.exports = { registerSchema, loginSchema, patientSchema, exerciseSchema, exerciseAssignSchema, assignmentUpdateSchema, exerciseLogSchema, medicineSchema, medicineAssignSchema, medicineLogSchema, symptomLogSchema, observationSchema, assessmentSchema, goalSchema, goalUpdateSchema, validate };
+module.exports = { registerSchema, loginSchema, patientSchema, exerciseSchema, exerciseAssignSchema, assignmentUpdateSchema, exerciseLogSchema, medicineSchema, medicineAssignSchema, medicineLogSchema, symptomLogSchema, observationSchema, assessmentSchema, goalSchema, goalUpdateSchema, appointmentSchema, appointmentUpdateSchema, validate };
